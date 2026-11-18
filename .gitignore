@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+data/
+node_modules/
+ios/
+*.spec
+LingoFlow.exe
+LingoFlow-iOS.ipa
+LingoFlow-macOS.dmg

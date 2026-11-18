@@ -1,0 +1,8 @@
+{
+  "appId": "com.lingoflow.english",
+  "appName": "LingoFlow",
+  "webDir": "frontend",
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

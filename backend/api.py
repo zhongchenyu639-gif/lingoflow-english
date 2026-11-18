@@ -1,0 +1,85 @@
+"""pywebview JavaScript bridge API."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from backend.database import Database
+from backend.tts import speak_windows_sapi, stop_windows_sapi
+
+
+class LingoFlowApi:
+    """Exposed to frontend via window.pywebview.api."""
+
+    def __init__(self, db: Database) -> None:
+        self.db = db
+
+    def get_dashboard(self) -> dict[str, Any]:
+        return self.db.get_dashboard()
+
+    def get_due_flashcards(self, category: str = "全部", limit: int = 20) -> list[dict[str, Any]]:
+        return self.db.get_due_flashcards(category=category, limit=int(limit))
+
+    def submit_flashcard_review(self, word_id: int, rating: str) -> dict[str, Any]:
+        return self.db.submit_flashcard_review(word_id=int(word_id), rating=rating)
+
+    def get_words(self, search: str = "", category: str = "全部") -> list[dict[str, Any]]:
+        return self.db.get_words(search=search, category=category)
+
+    def add_word(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.db.add_word(payload)
+
+    def update_word(self, word_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.db.update_word(int(word_id), payload)
+
+    def toggle_favorite(self, word_id: int) -> dict[str, Any]:
+        return self.db.toggle_favorite(int(word_id))
+
+    def update_word_notes(self, word_id: int, notes: str) -> dict[str, Any]:
+        return self.db.update_word_notes(int(word_id), notes)
+
+    def delete_word(self, word_id: int) -> bool:
+        return self.db.delete_word(int(word_id))
+
+    def reset_word_progress(self, word_id: int) -> bool:
+        return self.db.reset_word_progress(int(word_id))
+
+    def import_words_text(self, raw_text: str, category: str = "自定义") -> dict[str, int]:
+        return self.db.import_words_text(raw_text=raw_text, category=category)
+
+    def export_words_text(self, category: str = "全部") -> str:
+        return self.db.export_words_text(category=category)
+
+    def get_quiz_questions(
+        self, mode: str = "choice", category: str = "全部", count: int = 8
+    ) -> list[dict[str, Any]]:
+        return self.db.get_quiz_questions(mode=mode, category=category, count=int(count))
+
+    def submit_quiz_result(
+        self,
+        activity_type: str,
+        score: int,
+        total: int,
+        word_outcomes: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return self.db.submit_quiz_result(
+            activity_type=activity_type,
+            score=int(score),
+            total=int(total),
+            word_outcomes=word_outcomes,
+        )
+
+    def get_dialogues(self) -> list[dict[str, Any]]:
+        return self.db.get_dialogues()
+
+    def get_grammar_notes(self) -> list[dict[str, Any]]:
+        return self.db.get_grammar_notes()
+
+    def update_settings(self, updates: dict[str, Any]) -> dict[str, str]:
+        return self.db.update_settings(updates)
+
+    def speak_fallback(self, text: str, rate: float = 1.0) -> dict[str, Any]:
+        return speak_windows_sapi(text=text, rate=float(rate))
+
+    def stop_speaking(self) -> dict[str, bool]:
+        return stop_windows_sapi()

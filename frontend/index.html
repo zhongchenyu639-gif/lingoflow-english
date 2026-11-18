@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="LingoFlow" />
+  <title>LingoFlow - 英语学习桌面助手</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">LF</div>
+        <div>
+          <div class="brand-name">LingoFlow</div>
+          <div class="brand-sub">英语学习桌面助手</div>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="dashboard">
+          <span class="nav-icon">📊</span>
+          <span>今日概览</span>
+        </button>
+        <button class="nav-item" data-view="flashcards">
+          <span class="nav-icon">🃏</span>
+          <span>记忆卡片</span>
+          <span class="nav-badge" id="nav-due-badge">0</span>
+        </button>
+        <button class="nav-item" data-view="quiz">
+          <span class="nav-icon">✍️</span>
+          <span>测验与听写</span>
+        </button>
+        <button class="nav-item" data-view="dialogues">
+          <span class="nav-icon">💬</span>
+          <span>情景对话</span>
+        </button>
+        <button class="nav-item" data-view="grammar">
+          <span class="nav-icon">📘</span>
+          <span>语法指南</span>
+        </button>
+        <button class="nav-item" data-view="wordbook">
+          <span class="nav-icon">📚</span>
+          <span>词库管理</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="audio-controller" class="audio-controller">
+          <div class="audio-status" id="audio-status-text">🔇 语音空闲</div>
+          <div class="audio-btn-row">
+            <button id="global-pause-btn" class="btn btn-ghost btn-sm-ctrl" disabled>⏸ 暂停</button>
+            <button id="global-stop-btn" class="btn btn-ghost btn-sm-ctrl" disabled>⏹ 停止</button>
+          </div>
+        </div>
+        <div class="tts-control">
+          <label for="tts-accent">发音口音</label>
+          <select id="tts-accent">
+            <option value="en-US">美式英语 (US)</option>
+            <option value="en-GB">英式英语 (UK)</option>
+          </select>
+        </div>
+        <div class="tts-control">
+          <label for="tts-rate">语速 <span id="tts-rate-val">1.0x</span></label>
+          <input id="tts-rate" type="range" min="0.7" max="1.3" step="0.1" value="1.0" />
+        </div>
+        <button id="theme-toggle" class="btn btn-ghost btn-full">🌙 切换深色模式</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- View: Dashboard -->
+      <section id="view-dashboard" class="view active">
+        <header class="view-header">
+          <div>
+            <h1>欢迎回来，开始今天的学习</h1>
+            <p class="subtitle">基于 SM-2 间隔重复算法，科学巩固每一个英语词汇与表达</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="navigateTo('flashcards')">开始复习卡片</button>
+          </div>
+        </header>
+
+        <div class="stats-grid">
+          <div class="stat-card accent">
+            <div class="stat-label">今日待复习</div>
+            <div class="stat-value" id="stat-due">0</div>
+            <div class="stat-hint">按遗忘曲线安排</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">今日已完成</div>
+            <div class="stat-value"><span id="stat-today">0</span> / <span id="stat-goal">15</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="goal-progress"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">已掌握词汇</div>
+            <div class="stat-value"><span id="stat-mastered">0</span> / <span id="stat-total">0</span></div>
+            <div class="stat-hint">连续记忆 ≥ 2 轮</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">连续打卡 / 正确率</div>
+            <div class="stat-value"><span id="stat-streak">0</span>天 · <span id="stat-accuracy">0</span>%</div>
+            <div class="stat-hint">保持每日小步前进</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="panel">
+            <div class="panel-header">
+              <h2>最近 7 天学习记录</h2>
+              <div class="goal-editor">
+                <label for="daily-goal-input">每日目标:</label>
+                <input id="daily-goal-input" type="number" min="5" max="200" value="15" />
+                <button class="btn btn-sm" id="save-goal-btn">保存</button>
+              </div>
+            </div>
+            <div id="weekly-chart" class="weekly-chart"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2>快捷学习入口</h2>
+            </div>
+            <div class="quick-actions">
+              <button class="quick-card" onclick="navigateTo('flashcards')">
+                <span class="qc-icon">🃏</span>
+                <div>
+                  <div class="qc-title">记忆卡片复习</div>
+                  <div class="qc-desc">正反面翻转 + 发音 + SM-2 记忆评级</div>
+                </div>
+              </button>
+              <button class="quick-card" onclick="startQuickQuiz('choice')">
+                <span class="qc-icon">🎯</span>
+                <div>
+                  <div class="qc-title">单词选择题测验</div>
+                  <div class="qc-desc">快速检验词义辨析能力</div>
+                </div>
+              </button>
+              <button class="quick-card" onclick="startQuickQuiz('spelling')">
+                <span class="qc-icon">⌨️</span>
+                <div>
+                  <div class="qc-title">拼写与听写训练</div>
+                  <div class="qc-desc">听音拼写，强化拼读记忆</div>
+                </div>
+              </button>
+              <button class="quick-card" onclick="navigateTo('dialogues')">
+                <span class="qc-icon">🎧</span>
+                <div>
+                  <div class="qc-title">情景对话跟读</div>
+                  <div class="qc-desc">咖啡店、机场、职场会议实战对话</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Flashcards -->
+      <section id="view-flashcards" class="view">
+        <header class="view-header">
+          <div>
+            <h1>记忆卡片 (SM-2 间隔重复)</h1>
+            <p class="subtitle">快捷键：空格翻转卡片 · R 朗读发音 · 1-4 选择熟练度</p>
+          </div>
+          <div class="header-actions">
+            <label class="toggle-label">
+              <input type="checkbox" id="fc-auto-play" />
+              自动发音
+            </label>
+            <select id="fc-category" class="select-input">
+              <option value="全部">全部分类</option>
+            </select>
+            <button class="btn btn-ghost" id="fc-reload-btn">刷新队列</button>
+          </div>
+        </header>
+
+        <div class="fc-container">
+          <div class="fc-meta">
+            <span id="fc-progress-text">剩余 0 张待复习</span>
+            <div class="fc-meta-actions">
+              <button class="btn btn-ghost btn-xs" id="fc-prev-btn">⬅ 上一张</button>
+              <button class="btn btn-ghost btn-xs" id="fc-fav-btn">☆ 收藏</button>
+            </div>
+          </div>
+
+          <div id="fc-empty" class="empty-state hidden">
+            <div class="empty-icon">🎉</div>
+            <h3>太棒了！当前分类的待复习卡片已全部完成</h3>
+            <p>你可以切换其他分类、去做一组测验，或者去词库添加新单词。</p>
+            <div class="empty-actions">
+              <button class="btn btn-primary" onclick="navigateTo('quiz')">去做测验</button>
+              <button class="btn btn-ghost" onclick="navigateTo('wordbook')">管理词库</button>
+            </div>
+          </div>
+
+          <div id="fc-stage" class="fc-stage">
+            <div class="flashcard" id="flashcard">
+              <div class="fc-face fc-front">
+                <div class="fc-tag" id="fc-cat-tag">日常高频</div>
+                <div class="fc-word" id="fc-word">consistent</div>
+                <div class="fc-phonetic-row">
+                  <span class="fc-phonetic" id="fc-phonetic">/kənˈsɪstənt/</span>
+                  <span class="fc-pos" id="fc-pos">adj.</span>
+                  <button class="btn-icon" id="fc-speak-btn" title="朗读单词 (R)">🔊</button>
+                </div>
+                <div class="fc-hint">点击卡片或按空格键查看释义与例句</div>
+              </div>
+
+              <div class="fc-face fc-back">
+                <div class="fc-back-top">
+                  <div>
+                    <span class="fc-word-sm" id="fc-word-back">consistent</span>
+                    <span class="fc-phonetic" id="fc-phonetic-back">/kənˈsɪstənt/</span>
+                  </div>
+                  <button class="btn-icon" id="fc-speak-back-btn" title="朗读单词">🔊</button>
+                </div>
+                <div class="fc-meaning" id="fc-meaning">持续的；一致的</div>
+                <div class="fc-example-box">
+                  <div class="fc-example-header">
+                    <span>例句</span>
+                    <button class="btn-icon sm" id="fc-speak-ex-btn" title="朗读例句">🔊 朗读例句</button>
+                  </div>
+                  <div class="fc-example-en" id="fc-example-en"></div>
+                  <div class="fc-example-zh" id="fc-example-zh"></div>
+                </div>
+                <div class="fc-notes-row">
+                  <input id="fc-notes-input" type="text" placeholder="添加个人助记笔记（词根/联想/易混点）..." />
+                  <button class="btn btn-sm" id="fc-notes-save" type="button">保存笔记</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="fc-controls">
+              <button class="btn btn-primary btn-lg" id="fc-flip-btn">显示答案 (Space)</button>
+              <div class="fc-ratings hidden" id="fc-ratings">
+                <button class="rate-btn rate-again" data-rating="again">
+                  <span class="rate-title">1 · 忘记</span>
+                  <span class="rate-sub" id="prev-again">10分钟后</span>
+                </button>
+                <button class="rate-btn rate-hard" data-rating="hard">
+                  <span class="rate-title">2 · 困难</span>
+                  <span class="rate-sub" id="prev-hard">1天</span>
+                </button>
+                <button class="rate-btn rate-good" data-rating="good">
+                  <span class="rate-title">3 · 良好</span>
+                  <span class="rate-sub" id="prev-good">1天</span>
+                </button>
+                <button class="rate-btn rate-easy" data-rating="easy">
+                  <span class="rate-title">4 · 简单</span>
+                  <span class="rate-sub" id="prev-easy">4天</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Quiz & Listening -->
+      <section id="view-quiz" class="view">
+        <header class="view-header">
+          <div>
+            <h1>测验与听写训练</h1>
+            <p class="subtitle">支持英汉选择、拼写填空与纯听力辨词三种模式</p>
+          </div>
+          <div class="header-actions">
+            <select id="quiz-category" class="select-input">
+              <option value="全部">全部分类</option>
+            </select>
+            <select id="quiz-count" class="select-input">
+              <option value="5">5 题</option>
+              <option value="8" selected>8 题</option>
+              <option value="12">12 题</option>
+            </select>
+          </div>
+        </header>
+
+        <div class="mode-tabs">
+          <button class="mode-tab active" data-mode="choice">🎯 选择题测验</button>
+          <button class="mode-tab" data-mode="spelling">⌨️ 拼写填空</button>
+          <button class="mode-tab" data-mode="listening">🎧 听力练习</button>
+          <button class="mode-tab" data-mode="cloze">🧩 语境例句填空</button>
+        </div>
+
+        <div class="panel quiz-panel">
+          <div id="quiz-start-screen" class="quiz-center">
+            <h2 id="quiz-mode-title">选择题测验</h2>
+            <p id="quiz-mode-desc">根据英文单词选出正确的中文释义，检验词汇反应速度。</p>
+            <button class="btn btn-primary btn-lg" id="quiz-start-btn">开始本组练习</button>
+          </div>
+
+          <div id="quiz-active-screen" class="hidden">
+            <div class="quiz-topbar">
+              <span id="quiz-progress">第 1 / 8 题</span>
+              <span id="quiz-score-live">得分: 0</span>
+            </div>
+
+            <div class="quiz-prompt-box">
+              <div id="quiz-prompt-main" class="quiz-prompt-main"></div>
+              <div id="quiz-prompt-sub" class="quiz-prompt-sub"></div>
+              <div id="quiz-hint-text" class="quiz-hint-text hidden"></div>
+              <div class="quiz-audio-row" id="quiz-audio-row">
+                <button class="btn btn-ghost" id="quiz-play-btn">🔊 播放发音</button>
+                <button class="btn btn-ghost" id="quiz-slow-btn">🐢 慢速 (0.75x)</button>
+                <button class="btn btn-ghost hidden" id="quiz-stop-btn">⏹ 停止</button>
+              </div>
+            </div>
+
+            <div id="quiz-options" class="quiz-options"></div>
+
+            <div id="quiz-spelling-box" class="quiz-spelling-box hidden">
+              <input id="quiz-spelling-input" type="text" placeholder="请输入对应的英文单词，按 Enter 提交" autocomplete="off" />
+              <button type="button" class="btn btn-ghost" id="quiz-hint-btn">💡 提示</button>
+              <button class="btn btn-primary" id="quiz-spelling-submit">提交答案</button>
+            </div>
+
+            <div id="quiz-feedback" class="quiz-feedback hidden"></div>
+            <div class="quiz-next-row">
+              <button class="btn btn-primary hidden" id="quiz-next-btn">下一题 →</button>
+            </div>
+          </div>
+
+          <div id="quiz-result-screen" class="quiz-center hidden">
+            <div class="empty-icon">🏆</div>
+            <h2 id="quiz-final-score">本组得分：8 / 8</h2>
+            <p id="quiz-final-msg">正确率 100%，继续保持！</p>
+            <div id="quiz-review-list" class="quiz-review-list"></div>
+            <button class="btn btn-primary" id="quiz-restart-btn">再来一组</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Dialogues -->
+      <section id="view-dialogues" class="view">
+        <header class="view-header">
+          <div>
+            <h1>情景对话实战</h1>
+            <p class="subtitle">真实生活与职场高频场景，支持逐句朗读与连贯播放</p>
+          </div>
+          <div class="header-actions">
+            <label class="toggle-label">
+              <input type="checkbox" id="dlg-roleplay-toggle" />
+              🎭 角色扮演 (静音 You 跟读)
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="dlg-show-zh" checked />
+              显示中文翻译
+            </label>
+          </div>
+        </header>
+
+        <div class="split-layout">
+          <div class="list-pane" id="dialogue-list"></div>
+          <div class="detail-pane panel" id="dialogue-detail">
+            <div class="detail-header">
+              <div>
+                <span class="badge" id="dlg-level"></span>
+                <span class="badge badge-outline" id="dlg-scene"></span>
+                <h2 id="dlg-title" style="margin-top: 8px;"></h2>
+              </div>
+              <div class="dlg-controls">
+                <button class="btn btn-primary" id="dlg-play-all-btn">▶ 连续播放</button>
+                <button class="btn btn-ghost hidden" id="dlg-stop-btn">⏹ 停止</button>
+              </div>
+            </div>
+            <div id="dlg-lines" class="dlg-lines"></div>
+            <div class="key-phrases-box">
+              <h3>核心地道表达</h3>
+              <div id="dlg-phrases" class="phrases-grid"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Grammar -->
+      <section id="view-grammar" class="view">
+        <header class="view-header">
+          <div>
+            <h1>实用语法指南</h1>
+            <p class="subtitle">聚焦高频核心语法、双语例句朗读与常见易错点</p>
+          </div>
+        </header>
+
+        <div class="split-layout">
+          <div class="list-pane" id="grammar-list"></div>
+          <div class="detail-pane panel" id="grammar-detail">
+            <div class="detail-header">
+              <div>
+                <span class="badge" id="gram-level"></span>
+                <span class="badge badge-outline" id="gram-category"></span>
+                <h2 id="gram-title" style="margin-top: 8px;"></h2>
+              </div>
+            </div>
+            <p class="gram-summary" id="gram-summary"></p>
+            <div class="gram-section">
+              <h3>核心规则精讲</h3>
+              <pre class="gram-explanation" id="gram-explanation"></pre>
+            </div>
+            <div class="gram-section">
+              <h3>双语例句</h3>
+              <div id="gram-examples" class="gram-examples"></div>
+            </div>
+            <div class="gram-section mistakes-box">
+              <h3>⚠️ 常见易错点</h3>
+              <ul id="gram-mistakes"></ul>
+            </div>
+            <div class="gram-section minicheck-box" id="gram-minicheck">
+              <h3>🎯 即学即练 (Mini-Check)</h3>
+              <div id="gram-check-question" class="gram-check-q"></div>
+              <div id="gram-check-options" class="gram-check-opts"></div>
+              <div id="gram-check-feedback" class="quiz-feedback hidden"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Wordbook -->
+      <section id="view-wordbook" class="view">
+        <header class="view-header">
+          <div>
+            <h1>词库管理</h1>
+            <p class="subtitle">搜索、收藏、编辑自定义单词或批量导入导出词表</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-ghost" id="open-export-modal">📤 导出词库</button>
+            <button class="btn btn-ghost" id="open-import-modal">📥 批量导入</button>
+            <button class="btn btn-primary" id="open-add-modal">＋ 添加单词</button>
+          </div>
+        </header>
+
+        <div class="toolbar">
+          <input id="wb-search" type="search" class="search-input" placeholder="搜索英文单词、中文释义或例句..." />
+          <select id="wb-category" class="select-input">
+            <option value="全部">全部分类</option>
+          </select>
+          <span class="wb-count" id="wb-count">共 0 个词汇</span>
+        </div>
+
+        <div class="panel table-panel">
+          <table class="word-table">
+            <thead>
+              <tr>
+                <th>单词 / 音标</th>
+                <th>词性与释义</th>
+                <th>分类</th>
+                <th>记忆状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="wb-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: Add Word -->
+  <div id="add-word-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>添加新单词</h3>
+        <button class="btn-icon" onclick="closeModal('add-word-modal')">✕</button>
+      </div>
+      <form id="add-word-form" class="modal-form">
+        <div class="form-row">
+          <label>英文单词 *<input name="word" required placeholder="例如: resilient" /></label>
+          <label>音标<input name="phonetic" placeholder="例如: /rɪˈzɪliənt/" /></label>
+        </div>
+        <div class="form-row">
+          <label>词性<input name="part_of_speech" placeholder="例如: adj." /></label>
+          <label>分类<input name="category" value="自定义" placeholder="日常高频 / 职场商务 / 自定义" /></label>
+        </div>
+        <label>中文释义 *<input name="meaning_zh" required placeholder="例如: 有韧性的；能迅速恢复的" /></label>
+        <label>英文例句<input name="example_en" placeholder="She is remarkably resilient in difficult times." /></label>
+        <label>例句翻译<input name="example_zh" placeholder="她在困难时期表现出非凡的韧性。" /></label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('add-word-modal')">取消</button>
+          <button type="submit" class="btn btn-primary">保存单词</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Bulk Import -->
+  <div id="import-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>批量导入词汇</h3>
+        <button class="btn-icon" onclick="closeModal('import-modal')">✕</button>
+      </div>
+      <form id="import-form" class="modal-form">
+        <label>导入分类<input name="category" value="自定义" /></label>
+        <label>词汇文本（每行一条，用 <code>|</code> 或逗号分隔：<code>单词 | 释义 | 音标 | 英文例句 | 中文例句</code>）
+          <textarea name="raw_text" rows="7" placeholder="serendipity | 意外发现珍奇事物的运气 | /ˌserənˈdɪpəti/ | Meeting her was pure serendipity. | 遇见她纯粹是意外的惊喜。"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('import-modal')">取消</button>
+          <button type="submit" class="btn btn-primary">开始导入</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Word -->
+  <div id="edit-word-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>编辑单词</h3>
+        <button class="btn-icon" onclick="closeModal('edit-word-modal')">✕</button>
+      </div>
+      <form id="edit-word-form" class="modal-form">
+        <input type="hidden" name="id" />
+        <div class="form-row">
+          <label>英文单词 *<input name="word" required /></label>
+          <label>音标<input name="phonetic" /></label>
+        </div>
+        <div class="form-row">
+          <label>词性<input name="part_of_speech" /></label>
+          <label>分类<input name="category" /></label>
+        </div>
+        <label>中文释义 *<input name="meaning_zh" required /></label>
+        <label>英文例句<input name="example_en" /></label>
+        <label>例句翻译<input name="example_zh" /></label>
+        <label>助记笔记<input name="notes" placeholder="词根/联想/易混点..." /></label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('edit-word-modal')">取消</button>
+          <button type="submit" class="btn btn-primary">保存修改</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Export Words -->
+  <div id="export-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>导出词库文本</h3>
+        <button class="btn-icon" onclick="closeModal('export-modal')">✕</button>
+      </div>
+      <div class="modal-form">
+        <label>导出内容（当前筛选分类，格式：<code>单词 | 释义 | 音标 | 英文例句 | 中文例句 | 分类</code>）
+          <textarea id="export-textarea" rows="10" readonly></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('export-modal')">关闭</button>
+          <button type="button" class="btn btn-primary" id="copy-export-btn">📋 一键复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="seed_bundle.js"></script>
+  <script src="storage.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

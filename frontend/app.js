@@ -28,6 +28,16 @@ const state = {
   dialogueLineIndex: 0,
   grammarNotes: [],
   activeGrammarIndex: 0,
+  // Listen mode
+  listenWords: [],
+  listenIndex: 0,
+  listenPlayState: "idle", // "idle" | "playing" | "paused"
+  // Wordbook pagination
+  wbPage: 1,
+  // Shadowing recorder
+  mediaRecorder: null,
+  recordingTarget: null,
+  recordedUrl: "",
   // Audio control state
   speechToken: 0,
   isSpeakingSingle: false,
@@ -38,6 +48,7 @@ const state = {
 };
 
 const clonedAudio = new Audio();
+const shadowPlaybackAudio = new Audio();
 
 const api = () => window.pywebview?.api || window.localLingoApi;
 
@@ -65,7 +76,8 @@ function updateAudioControllerUI() {
   const quizStopBtn = document.getElementById("quiz-stop-btn");
 
   const isDlgActive = state.dialoguePlayState !== "idle";
-  const isActive = isDlgActive || state.isSpeakingSingle;
+  const isListenActive = state.listenPlayState !== "idle";
+  const isActive = isDlgActive || isListenActive || state.isSpeakingSingle;
 
   box.classList.toggle("active", isActive);
   pauseBtn.disabled = !isActive;
@@ -75,25 +87,32 @@ function updateAudioControllerUI() {
   }
 
   if (state.dialoguePlayState === "playing") {
-    statusEl.textContent = state.activeAudioLabel || "🔊 正在播放对话...";
-    pauseBtn.textContent = "⏸ 暂停";
+    statusEl.textContent = state.activeAudioLabel || "正在播放对话...";
+    pauseBtn.textContent = "暂停";
   } else if (state.dialoguePlayState === "paused") {
-    statusEl.textContent = `⏸ 已暂停 (${state.dialogueLineIndex + 1})`;
-    pauseBtn.textContent = "▶ 继续";
+    statusEl.textContent = `已暂停 (第 ${state.dialogueLineIndex + 1} 句)`;
+    pauseBtn.textContent = "继续";
+  } else if (state.listenPlayState === "playing") {
+    statusEl.textContent = state.activeAudioLabel || "随身听连播中...";
+    pauseBtn.textContent = "暂停";
+  } else if (state.listenPlayState === "paused") {
+    statusEl.textContent = `随身听已暂停 (${state.listenIndex + 1})`;
+    pauseBtn.textContent = "继续";
   } else if (state.isSpeakingSingle) {
     if (state.isPausedSingle) {
-      statusEl.textContent = "⏸ 发音已暂停";
-      pauseBtn.textContent = "▶ 继续";
+      statusEl.textContent = "发音已暂停";
+      pauseBtn.textContent = "继续";
     } else {
-      statusEl.textContent = state.activeAudioLabel || "🔊 正在朗读...";
-      pauseBtn.textContent = "⏸ 暂停";
+      statusEl.textContent = state.activeAudioLabel || "正在朗读...";
+      pauseBtn.textContent = "暂停";
     }
   } else {
-    statusEl.textContent = "🔇 语音空闲";
-    pauseBtn.textContent = "⏸ 暂停";
+    statusEl.textContent = "语音待命";
+    pauseBtn.textContent = "暂停";
   }
 
   updateDialogueControlUI();
+  updateListenControlUI();
 }
 
 function updateDialogueControlUI() {
@@ -283,11 +302,13 @@ function stopAllSpeech() {
   }
   state.dialoguePlayState = "idle";
   state.dialogueLineIndex = 0;
+  state.listenPlayState = "idle";
   state.isSpeakingSingle = false;
   state.isPausedSingle = false;
   state.activeAudioLabel = "";
 
   stopClonedAudioElement();
+  try { shadowPlaybackAudio.pause(); } catch {}
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -307,12 +328,8 @@ function togglePauseSpeech() {
       state.roleplayCancel = null;
     }
     stopClonedAudioElement();
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    if (window.pywebview?.api?.stop_speaking) {
-      api().stop_speaking().catch(() => {});
-    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (window.pywebview?.api?.stop_speaking) api().stop_speaking().catch(() => {});
     state.isSpeakingSingle = false;
     updateAudioControllerUI();
     return;
@@ -320,6 +337,26 @@ function togglePauseSpeech() {
 
   if (state.dialoguePlayState === "paused") {
     runDialogueLoop(state.dialogueLineIndex);
+    return;
+  }
+
+  if (state.listenPlayState === "playing") {
+    state.listenPlayState = "paused";
+    state.speechToken += 1;
+    if (state.roleplayCancel) {
+      state.roleplayCancel();
+      state.roleplayCancel = null;
+    }
+    stopClonedAudioElement();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (window.pywebview?.api?.stop_speaking) api().stop_speaking().catch(() => {});
+    state.isSpeakingSingle = false;
+    updateAudioControllerUI();
+    return;
+  }
+
+  if (state.listenPlayState === "paused") {
+    runListenLoop(state.listenIndex);
     return;
   }
 
@@ -362,16 +399,17 @@ function navigateTo(viewName) {
 
   if (viewName === "dashboard") loadDashboard();
   if (viewName === "flashcards") loadFlashcards();
+  if (viewName === "listen") loadListenView();
   if (viewName === "dialogues") loadDialogues();
   if (viewName === "grammar") loadGrammar();
-  if (viewName === "wordbook") loadWordbook();
+  if (viewName === "wordbook") loadWordbook(true);
   updateAudioControllerUI();
 }
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   const btn = document.getElementById("theme-toggle");
-  btn.textContent = theme === "dark" ? "☀️ 切换浅色模式" : "🌙 切换深色模式";
+  btn.textContent = theme === "dark" ? "浅色外观" : "深色外观";
 }
 
 function populateCategorySelects(categories, favoritesCount = 0, mistakesCount = 0) {
@@ -390,8 +428,9 @@ function populateCategorySelects(categories, favoritesCount = 0, mistakesCount =
       )
       .join("");
 
-  ["fc-category", "quiz-category", "wb-category"].forEach((id) => {
+  ["fc-category", "listen-category", "quiz-category", "wb-category"].forEach((id) => {
     const sel = document.getElementById(id);
+    if (!sel) return;
     const prev = sel.value || "全部";
     sel.innerHTML = optionsHtml;
     if ([...sel.options].some((o) => o.value === prev)) {
@@ -416,10 +455,31 @@ async function loadDashboard() {
   document.getElementById("nav-due-badge").textContent = data.due_words;
   document.getElementById("stat-today").textContent = data.today_count;
   document.getElementById("stat-goal").textContent = data.daily_goal;
+  document.getElementById("stat-learned").textContent = data.learned_words ?? 0;
   document.getElementById("stat-mastered").textContent = data.mastered_words;
   document.getElementById("stat-total").textContent = data.total_words;
   document.getElementById("stat-streak").textContent = data.streak_days;
   document.getElementById("stat-accuracy").textContent = data.accuracy;
+
+  const xp = data.xp ?? 0;
+  const lvl = data.level ?? 1;
+  const title = data.level_title || "初学萌新";
+  document.getElementById("brand-level-badge").textContent = `Lv.${lvl} ${title} · ${xp} XP`;
+  document.getElementById("stat-xp-hint").textContent = `累计 ${xp} XP · Lv.${lvl}`;
+  document.getElementById("xp-level-text").textContent = `当前等级：Lv.${lvl} ${title} (${xp} XP)`;
+
+  const badgesGrid = document.getElementById("badges-grid");
+  if (badgesGrid && Array.isArray(data.badges)) {
+    badgesGrid.innerHTML = data.badges
+      .map(
+        (b) => `
+        <div class="badge-card ${b.unlocked ? "unlocked" : ""}">
+          <div class="badge-card-title">${b.unlocked ? "已解锁 · " : "未解锁 · "}${escapeHtml(b.name)}</div>
+          <div class="badge-card-desc">${escapeHtml(b.desc)}</div>
+        </div>`
+      )
+      .join("");
+  }
 
   const pct = Math.min(100, Math.round((data.today_count / data.daily_goal) * 100));
   document.getElementById("goal-progress").style.width = `${pct}%`;
@@ -1038,15 +1098,27 @@ async function loadGrammar() {
   renderGrammarMiniCheck(g);
 }
 
-// Wordbook
+// Wordbook (Paginated for 15,000+ words)
 let wordbookCache = [];
 
-async function loadWordbook() {
+async function loadWordbook(resetPage = false) {
+  if (resetPage === true) state.wbPage = 1;
   const search = document.getElementById("wb-search").value;
   const category = document.getElementById("wb-category").value;
-  const words = await api().get_words(search, category);
+  const res = typeof api().get_words_paged === "function"
+    ? await api().get_words_paged(search, category, state.wbPage, 50)
+    : { items: await api().get_words(search, category), total: 0, page: 1, total_pages: 1 };
+
+  const words = res.items || [];
+  const total = res.total ?? words.length;
+  state.wbPage = res.page || 1;
+  const totalPages = res.total_pages || 1;
+
   wordbookCache = words;
-  document.getElementById("wb-count").textContent = `共 ${words.length} 个词汇`;
+  document.getElementById("wb-count").textContent = `共 ${total} 个词汇`;
+  document.getElementById("wb-page-info").textContent = `第 ${state.wbPage} / ${totalPages} 页`;
+  document.getElementById("wb-prev-page").disabled = state.wbPage <= 1;
+  document.getElementById("wb-next-page").disabled = state.wbPage >= totalPages;
 
   const tbody = document.getElementById("wb-tbody");
   tbody.innerHTML = words
@@ -1056,9 +1128,11 @@ async function loadWordbook() {
           ? "已掌握"
           : w.repetitions > 0
           ? `复习中 (${w.interval_days}天)`
-          : "新词";
+          : w.last_reviewed_at
+          ? "学习中"
+          : "未学习";
       const favClass = w.is_favorite ? "fav-btn-active" : "";
-      const noteLine = w.notes ? `<div class="word-cell-sub">📝 ${escapeHtml(w.notes)}</div>` : "";
+      const noteLine = w.notes ? `<div class="word-cell-sub">笔记：${escapeHtml(w.notes)}</div>` : "";
       return `
         <tr>
           <td>
@@ -1073,15 +1147,153 @@ async function loadWordbook() {
           <td><span class="badge badge-outline">${escapeHtml(w.category)}</span></td>
           <td>${status}</td>
           <td style="white-space:nowrap;">
-            <button class="btn-icon sm" onclick="speakText(${JSON.stringify(w.word)})" title="发音">🔊</button>
-            <button class="btn-icon sm ${favClass}" onclick="toggleWordFavorite(${w.id})" title="收藏">${w.is_favorite ? "⭐" : "☆"}</button>
-            <button class="btn-icon sm" onclick="openEditWordModal(${w.id})" title="编辑">✏️</button>
-            <button class="btn-icon sm" onclick="resetWord(${w.id})" title="重置进度">↺</button>
-            <button class="btn-icon sm" onclick="deleteWord(${w.id})" title="删除">🗑️</button>
+            <button class="btn-icon sm" onclick="speakText(${JSON.stringify(w.word)})" title="发音">朗读</button>
+            <button class="btn-icon sm ${favClass}" onclick="toggleWordFavorite(${w.id})" title="收藏">${w.is_favorite ? "★" : "☆"}</button>
+            <button class="btn-icon sm" onclick="openEditWordModal(${w.id})" title="编辑">编辑</button>
+            <button class="btn-icon sm" onclick="resetWord(${w.id})" title="重置进度">重置</button>
+            <button class="btn-icon sm" onclick="deleteWord(${w.id})" title="删除">删除</button>
           </td>
         </tr>`;
     })
     .join("");
+}
+
+// Listen / 随身听
+function updateListenControlUI() {
+  const playBtn = document.getElementById("listen-play-btn");
+  if (!playBtn) return;
+  if (state.listenPlayState === "playing") playBtn.textContent = "暂停";
+  else if (state.listenPlayState === "paused") playBtn.textContent = "继续连播";
+  else playBtn.textContent = "开始连播";
+}
+
+async function loadListenView() {
+  const cat = document.getElementById("listen-category").value;
+  state.listenWords = typeof api().get_listen_words === "function"
+    ? await api().get_listen_words(cat, 60)
+    : (await api().get_words("", cat)).slice(0, 60);
+  state.listenIndex = 0;
+  renderListenStage();
+}
+
+function renderListenStage() {
+  const list = state.listenWords;
+  const metaEl = document.getElementById("listen-index-text");
+  const wordEl = document.getElementById("listen-word");
+  const phEl = document.getElementById("listen-phonetic");
+  const meanEl = document.getElementById("listen-meaning");
+  const exEl = document.getElementById("listen-example");
+
+  if (!list.length) {
+    metaEl.textContent = "当前分类暂无词汇";
+    wordEl.textContent = "—";
+    phEl.textContent = "";
+    meanEl.textContent = "请切换其他词书分类";
+    exEl.textContent = "";
+    return;
+  }
+  const w = list[state.listenIndex];
+  metaEl.textContent = `随身听 · ${state.listenIndex + 1} / ${list.length} · ${w.category}`;
+  wordEl.textContent = w.word;
+  phEl.textContent = `${w.phonetic || ""} ${w.part_of_speech || ""}`;
+  meanEl.textContent = w.meaning_zh;
+  exEl.textContent = w.example_en ? `${w.example_en} — ${w.example_zh || ""}` : "";
+}
+
+async function runListenLoop(startIndex = 0) {
+  if (!state.listenWords.length) await loadListenView();
+  if (!state.listenWords.length) return;
+
+  state.listenPlayState = "playing";
+  state.listenIndex = startIndex;
+  updateAudioControllerUI();
+
+  while (state.listenPlayState === "playing") {
+    if (state.listenIndex >= state.listenWords.length) {
+      if (document.getElementById("listen-loop").checked) {
+        state.listenIndex = 0;
+      } else {
+        break;
+      }
+    }
+    renderListenStage();
+    const w = state.listenWords[state.listenIndex];
+    const repeats = parseInt(document.getElementById("listen-repeat").value || "2", 10);
+
+    for (let r = 0; r < repeats; r++) {
+      if (state.listenPlayState !== "playing") break;
+      const ok = await speakSingleInternal(w.word, null, `随身听 (${state.listenIndex + 1}/${state.listenWords.length})`);
+      if (!ok || state.listenPlayState !== "playing") break;
+      if (r < repeats - 1) {
+        const slept = await cancellableSleep(600);
+        if (!slept || state.listenPlayState !== "playing") break;
+      }
+    }
+    if (state.listenPlayState !== "playing") break;
+    const slept = await cancellableSleep(1100);
+    if (!slept || state.listenPlayState !== "playing") break;
+    state.listenIndex += 1;
+  }
+
+  if (state.listenPlayState === "playing") {
+    state.listenPlayState = "idle";
+    state.listenIndex = 0;
+    updateAudioControllerUI();
+  }
+}
+
+// Shadowing Recorder (口语跟读录音对比)
+async function toggleShadowRecord(target) {
+  const recBtn = document.getElementById(target === "fc" ? "fc-record-btn" : "dlg-record-btn");
+  const playBtn = document.getElementById(target === "fc" ? "fc-playback-btn" : "dlg-playback-btn");
+
+  if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
+    state.mediaRecorder.stop();
+    recBtn.classList.remove("recording-active");
+    recBtn.textContent = target === "fc" ? "跟读录音" : "整段跟读录音";
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast("当前环境不支持麦克风录音");
+    return;
+  }
+
+  try {
+    stopAllSpeech();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    const mr = new MediaRecorder(stream);
+    state.mediaRecorder = mr;
+    state.recordingTarget = target;
+
+    mr.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+    };
+    mr.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+      if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
+      state.recordedUrl = URL.createObjectURL(blob);
+      playBtn.classList.remove("hidden");
+      showToast("跟读录音完成，可点击回放对比");
+    };
+    mr.start();
+    recBtn.classList.add("recording-active");
+    recBtn.textContent = "录音中... 点击结束";
+  } catch (err) {
+    showToast("无法访问麦克风，请检查系统录音权限");
+  }
+}
+
+function playShadowRecording() {
+  if (!state.recordedUrl) {
+    showToast("请先录制跟读音频");
+    return;
+  }
+  stopAllSpeech();
+  shadowPlaybackAudio.src = state.recordedUrl;
+  shadowPlaybackAudio.play().catch(() => showToast("回放失败"));
 }
 
 async function toggleWordFavorite(id) {
@@ -1271,9 +1483,52 @@ function bindEvents() {
   document.getElementById("dlg-play-all-btn").addEventListener("click", handleDialoguePlayPause);
   document.getElementById("dlg-stop-btn").addEventListener("click", stopAllSpeech);
 
+  // Listen mode
+  document.getElementById("listen-category").addEventListener("change", () => {
+    stopAllSpeech();
+    loadListenView();
+  });
+  document.getElementById("listen-play-btn").addEventListener("click", () => {
+    if (state.listenPlayState === "idle") runListenLoop(state.listenIndex);
+    else togglePauseSpeech();
+  });
+  document.getElementById("listen-stop-btn").addEventListener("click", stopAllSpeech);
+  document.getElementById("listen-prev-btn").addEventListener("click", () => {
+    if (!state.listenWords.length) return;
+    const wasPlaying = state.listenPlayState === "playing";
+    stopAllSpeech();
+    state.listenIndex = (state.listenIndex - 1 + state.listenWords.length) % state.listenWords.length;
+    renderListenStage();
+    if (wasPlaying) runListenLoop(state.listenIndex);
+  });
+  document.getElementById("listen-next-btn").addEventListener("click", () => {
+    if (!state.listenWords.length) return;
+    const wasPlaying = state.listenPlayState === "playing";
+    stopAllSpeech();
+    state.listenIndex = (state.listenIndex + 1) % state.listenWords.length;
+    renderListenStage();
+    if (wasPlaying) runListenLoop(state.listenIndex);
+  });
+
+  // Shadowing recorder
+  document.getElementById("fc-record-btn").addEventListener("click", () => toggleShadowRecord("fc"));
+  document.getElementById("fc-playback-btn").addEventListener("click", playShadowRecording);
+  document.getElementById("dlg-record-btn").addEventListener("click", () => toggleShadowRecord("dlg"));
+  document.getElementById("dlg-playback-btn").addEventListener("click", playShadowRecording);
+
   // Wordbook
-  document.getElementById("wb-search").addEventListener("input", loadWordbook);
-  document.getElementById("wb-category").addEventListener("change", loadWordbook);
+  document.getElementById("wb-search").addEventListener("input", () => loadWordbook(true));
+  document.getElementById("wb-category").addEventListener("change", () => loadWordbook(true));
+  document.getElementById("wb-prev-page").addEventListener("click", () => {
+    if (state.wbPage > 1) {
+      state.wbPage -= 1;
+      loadWordbook(false);
+    }
+  });
+  document.getElementById("wb-next-page").addEventListener("click", () => {
+    state.wbPage += 1;
+    loadWordbook(false);
+  });
   document.getElementById("open-add-modal").addEventListener("click", () => openModal("add-word-modal"));
   document.getElementById("open-import-modal").addEventListener("click", () => openModal("import-modal"));
   document.getElementById("open-export-modal").addEventListener("click", async () => {

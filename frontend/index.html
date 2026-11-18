@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="LingoFlow" />
-  <title>LingoFlow - 英语学习桌面助手</title>
+  <title>LingoFlow · 英语精学工作台</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -18,60 +18,64 @@
         <div class="brand-logo">LF</div>
         <div>
           <div class="brand-name">LingoFlow</div>
-          <div class="brand-sub">英语学习桌面助手</div>
+          <div class="brand-sub" id="brand-level-badge">Lv.1 初学萌新 · 0 XP</div>
         </div>
       </div>
 
       <nav class="nav-list">
         <button class="nav-item active" data-view="dashboard">
-          <span class="nav-icon">📊</span>
-          <span>今日概览</span>
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span>学习概览</span>
         </button>
         <button class="nav-item" data-view="flashcards">
-          <span class="nav-icon">🃏</span>
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h10M7 14h6"/></svg>
           <span>记忆卡片</span>
           <span class="nav-badge" id="nav-due-badge">0</span>
         </button>
+        <button class="nav-item" data-view="listen">
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+          <span>随身听</span>
+        </button>
         <button class="nav-item" data-view="quiz">
-          <span class="nav-icon">✍️</span>
-          <span>测验与听写</span>
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span>测验听写</span>
         </button>
         <button class="nav-item" data-view="dialogues">
-          <span class="nav-icon">💬</span>
-          <span>情景对话</span>
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>情景口语</span>
         </button>
         <button class="nav-item" data-view="grammar">
-          <span class="nav-icon">📘</span>
-          <span>语法指南</span>
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span>语法手册</span>
         </button>
         <button class="nav-item" data-view="wordbook">
-          <span class="nav-icon">📚</span>
-          <span>词库管理</span>
+          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          <span>词海词库</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
         <div id="audio-controller" class="audio-controller">
-          <div class="audio-status" id="audio-status-text">🔇 语音空闲</div>
+          <div class="audio-status" id="audio-status-text">语音待命</div>
           <div class="audio-btn-row">
-            <button id="global-pause-btn" class="btn btn-ghost btn-sm-ctrl" disabled>⏸ 暂停</button>
-            <button id="global-stop-btn" class="btn btn-ghost btn-sm-ctrl" disabled>⏹ 停止</button>
+            <button id="global-pause-btn" class="btn btn-ghost btn-sm-ctrl" disabled>暂停</button>
+            <button id="global-stop-btn" class="btn btn-ghost btn-sm-ctrl" disabled>停止</button>
           </div>
         </div>
         <div class="tts-control">
-          <label for="tts-accent">发音口音</label>
+          <label for="tts-accent">发音引擎</label>
           <select id="tts-accent">
-            <option value="cloned-voice">🎙️ 我的克隆音色 (离线+云端)</option>
+            <option value="cloned-voice">我的克隆音色 (离线+云端)</option>
             <option value="en-US">美式英语 (US)</option>
             <option value="en-GB">英式英语 (UK)</option>
           </select>
         </div>
-        <button id="play-voice-sample-btn" class="btn btn-ghost btn-sm-ctrl" type="button">🎵 试听我的原声样本</button>
+        <button id="play-voice-sample-btn" class="btn btn-ghost btn-sm-ctrl" type="button">试听原声样本</button>
         <div class="tts-control">
           <label for="tts-rate">语速 <span id="tts-rate-val">1.0x</span></label>
           <input id="tts-rate" type="range" min="0.7" max="1.3" step="0.1" value="1.0" />
         </div>
-        <button id="theme-toggle" class="btn btn-ghost btn-full">🌙 切换深色模式</button>
+        <button id="theme-toggle" class="btn btn-ghost btn-full">深色外观</button>
       </div>
     </aside>
 
@@ -81,43 +85,44 @@
       <section id="view-dashboard" class="view active">
         <header class="view-header">
           <div>
-            <h1>欢迎回来，开始今天的学习</h1>
-            <p class="subtitle">基于 SM-2 间隔重复算法，科学巩固每一个英语词汇与表达</p>
+            <h1>今日学习计划</h1>
+            <p class="subtitle">全阶段分级词库 · SM-2 间隔重复 · 离线个人声纹跟读</p>
           </div>
           <div class="header-actions">
-            <button class="btn btn-primary" onclick="navigateTo('flashcards')">开始复习卡片</button>
+            <button class="btn btn-ghost" onclick="navigateTo('listen')">打开随身听</button>
+            <button class="btn btn-primary" onclick="navigateTo('flashcards')">开始今日记忆</button>
           </div>
         </header>
 
         <div class="stats-grid">
           <div class="stat-card accent">
-            <div class="stat-label">今日待复习</div>
+            <div class="stat-label">今日待学任务</div>
             <div class="stat-value" id="stat-due">0</div>
-            <div class="stat-hint">按遗忘曲线安排</div>
+            <div class="stat-hint" id="stat-due-sub">含到期复习与今日新词</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">今日已完成</div>
+            <div class="stat-label">今日学习进度</div>
             <div class="stat-value"><span id="stat-today">0</span> / <span id="stat-goal">15</span></div>
             <div class="progress-bar"><div class="progress-fill" id="goal-progress"></div></div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">已掌握词汇</div>
-            <div class="stat-value"><span id="stat-mastered">0</span> / <span id="stat-total">0</span></div>
-            <div class="stat-hint">连续记忆 ≥ 2 轮</div>
+            <div class="stat-label">已学 / 熟练掌握</div>
+            <div class="stat-value"><span id="stat-learned">0</span> · <span id="stat-mastered">0</span></div>
+            <div class="stat-hint">总词库 <span id="stat-total">0</span> 词</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">连续打卡 / 正确率</div>
+            <div class="stat-label">连续打卡 · 正确率</div>
             <div class="stat-value"><span id="stat-streak">0</span>天 · <span id="stat-accuracy">0</span>%</div>
-            <div class="stat-hint">保持每日小步前进</div>
+            <div class="stat-hint" id="stat-xp-hint">累计 0 XP</div>
           </div>
         </div>
 
         <div class="dashboard-grid">
           <div class="panel">
             <div class="panel-header">
-              <h2>最近 7 天学习记录</h2>
+              <h2>最近 7 天学习量</h2>
               <div class="goal-editor">
-                <label for="daily-goal-input">每日目标:</label>
+                <label for="daily-goal-input">每日新词目标</label>
                 <input id="daily-goal-input" type="number" min="5" max="200" value="15" />
                 <button class="btn btn-sm" id="save-goal-btn">保存</button>
               </div>
@@ -127,39 +132,47 @@
 
           <div class="panel">
             <div class="panel-header">
-              <h2>快捷学习入口</h2>
+              <h2>快速进入训练</h2>
             </div>
             <div class="quick-actions">
               <button class="quick-card" onclick="navigateTo('flashcards')">
-                <span class="qc-icon">🃏</span>
+                <div class="qc-badge">记忆</div>
                 <div>
-                  <div class="qc-title">记忆卡片复习</div>
-                  <div class="qc-desc">正反面翻转 + 发音 + SM-2 记忆评级</div>
+                  <div class="qc-title">记忆卡片 & 跟读录音</div>
+                  <div class="qc-desc">正反翻转 + 个人音色 + 麦克风跟读对比</div>
+                </div>
+              </button>
+              <button class="quick-card" onclick="navigateTo('listen')">
+                <div class="qc-badge">听力</div>
+                <div>
+                  <div class="qc-title">随身听磨耳朵</div>
+                  <div class="qc-desc">按词书连续循环播报，支持暂停与切词</div>
                 </div>
               </button>
               <button class="quick-card" onclick="startQuickQuiz('choice')">
-                <span class="qc-icon">🎯</span>
+                <div class="qc-badge">测验</div>
                 <div>
-                  <div class="qc-title">单词选择题测验</div>
-                  <div class="qc-desc">快速检验词义辨析能力</div>
-                </div>
-              </button>
-              <button class="quick-card" onclick="startQuickQuiz('spelling')">
-                <span class="qc-icon">⌨️</span>
-                <div>
-                  <div class="qc-title">拼写与听写训练</div>
-                  <div class="qc-desc">听音拼写，强化拼读记忆</div>
+                  <div class="qc-title">四选一 / 拼写 / 语境填空</div>
+                  <div class="qc-desc">自动收录错题到易错词本</div>
                 </div>
               </button>
               <button class="quick-card" onclick="navigateTo('dialogues')">
-                <span class="qc-icon">🎧</span>
+                <div class="qc-badge">口语</div>
                 <div>
-                  <div class="qc-title">情景对话跟读</div>
-                  <div class="qc-desc">咖啡店、机场、职场会议实战对话</div>
+                  <div class="qc-title">12 组全场景口语对话</div>
+                  <div class="qc-desc">角色扮演静音跟读 + 录音回放</div>
                 </div>
               </button>
             </div>
           </div>
+        </div>
+
+        <div class="panel" style="margin-top: 18px;">
+          <div class="panel-header">
+            <h2>学习成就徽章</h2>
+            <span class="subtitle" id="xp-level-text" style="margin-top:0;"></span>
+          </div>
+          <div id="badges-grid" class="badges-grid"></div>
         </div>
       </section>
 
@@ -167,8 +180,8 @@
       <section id="view-flashcards" class="view">
         <header class="view-header">
           <div>
-            <h1>记忆卡片 (SM-2 间隔重复)</h1>
-            <p class="subtitle">快捷键：空格翻转卡片 · R 朗读发音 · 1-4 选择熟练度</p>
+            <h1>记忆卡片</h1>
+            <p class="subtitle">快捷键：Space 翻卡 · R 朗读 · 1-4 记忆评级（支持麦克风跟读对比）</p>
           </div>
           <div class="header-actions">
             <label class="toggle-label">
@@ -178,7 +191,7 @@
             <select id="fc-category" class="select-input">
               <option value="全部">全部分类</option>
             </select>
-            <button class="btn btn-ghost" id="fc-reload-btn">刷新队列</button>
+            <button class="btn btn-ghost" id="fc-reload-btn">换一批</button>
           </div>
         </header>
 
@@ -186,18 +199,17 @@
           <div class="fc-meta">
             <span id="fc-progress-text">剩余 0 张待复习</span>
             <div class="fc-meta-actions">
-              <button class="btn btn-ghost btn-xs" id="fc-prev-btn">⬅ 上一张</button>
-              <button class="btn btn-ghost btn-xs" id="fc-fav-btn">☆ 收藏</button>
+              <button class="btn btn-ghost btn-xs" id="fc-prev-btn">上一张</button>
+              <button class="btn btn-ghost btn-xs" id="fc-fav-btn">收藏</button>
             </div>
           </div>
 
           <div id="fc-empty" class="empty-state hidden">
-            <div class="empty-icon">🎉</div>
-            <h3>太棒了！当前分类的待复习卡片已全部完成</h3>
-            <p>你可以切换其他分类、去做一组测验，或者去词库添加新单词。</p>
+            <h3>当前分类的本轮卡片已全部完成</h3>
+            <p>可以切换其他分级词书、打开随身听磨耳朵，或去做一组测验巩固。</p>
             <div class="empty-actions">
-              <button class="btn btn-primary" onclick="navigateTo('quiz')">去做测验</button>
-              <button class="btn btn-ghost" onclick="navigateTo('wordbook')">管理词库</button>
+              <button class="btn btn-primary" onclick="loadFlashcards()">再来一组</button>
+              <button class="btn btn-ghost" onclick="navigateTo('quiz')">去做测验</button>
             </div>
           </div>
 
@@ -209,9 +221,13 @@
                 <div class="fc-phonetic-row">
                   <span class="fc-phonetic" id="fc-phonetic">/kənˈsɪstənt/</span>
                   <span class="fc-pos" id="fc-pos">adj.</span>
-                  <button class="btn-icon" id="fc-speak-btn" title="朗读单词 (R)">🔊</button>
+                  <button class="btn-icon" id="fc-speak-btn" title="朗读单词 (R)">朗读</button>
                 </div>
-                <div class="fc-hint">点击卡片或按空格键查看释义与例句</div>
+                <div class="shadowing-bar">
+                  <button class="btn btn-ghost btn-xs" id="fc-record-btn" type="button">跟读录音</button>
+                  <button class="btn btn-ghost btn-xs hidden" id="fc-playback-btn" type="button">回放我的读音</button>
+                </div>
+                <div class="fc-hint">点击卡片空白处或按 Space 查看释义</div>
               </div>
 
               <div class="fc-face fc-back">
@@ -220,20 +236,20 @@
                     <span class="fc-word-sm" id="fc-word-back">consistent</span>
                     <span class="fc-phonetic" id="fc-phonetic-back">/kənˈsɪstənt/</span>
                   </div>
-                  <button class="btn-icon" id="fc-speak-back-btn" title="朗读单词">🔊</button>
+                  <button class="btn-icon" id="fc-speak-back-btn" title="朗读单词">朗读</button>
                 </div>
                 <div class="fc-meaning" id="fc-meaning">持续的；一致的</div>
                 <div class="fc-example-box">
                   <div class="fc-example-header">
-                    <span>例句</span>
-                    <button class="btn-icon sm" id="fc-speak-ex-btn" title="朗读例句">🔊 朗读例句</button>
+                    <span>例句语境</span>
+                    <button class="btn-icon sm" id="fc-speak-ex-btn" title="朗读例句">朗读例句</button>
                   </div>
                   <div class="fc-example-en" id="fc-example-en"></div>
                   <div class="fc-example-zh" id="fc-example-zh"></div>
                 </div>
                 <div class="fc-notes-row">
-                  <input id="fc-notes-input" type="text" placeholder="添加个人助记笔记（词根/联想/易混点）..." />
-                  <button class="btn btn-sm" id="fc-notes-save" type="button">保存笔记</button>
+                  <input id="fc-notes-input" type="text" placeholder="记录词根词缀或助记笔记..." />
+                  <button class="btn btn-sm" id="fc-notes-save" type="button">保存</button>
                 </div>
               </div>
             </div>
@@ -263,12 +279,50 @@
         </div>
       </section>
 
+      <!-- View: Listen (随身听) -->
+      <section id="view-listen" class="view">
+        <header class="view-header">
+          <div>
+            <h1>随身听 · 磨耳朵</h1>
+            <p class="subtitle">选定词书后连续播放，配合大字屏显巩固听觉记忆</p>
+          </div>
+          <div class="header-actions">
+            <select id="listen-category" class="select-input">
+              <option value="全部">全部分类</option>
+            </select>
+            <select id="listen-repeat" class="select-input">
+              <option value="1">每词读 1 遍</option>
+              <option value="2" selected>每词读 2 遍</option>
+            </select>
+            <label class="toggle-label">
+              <input type="checkbox" id="listen-loop" checked />
+              列表循环
+            </label>
+          </div>
+        </header>
+
+        <div class="panel listen-stage">
+          <div class="listen-meta" id="listen-index-text">等待加载播放列表</div>
+          <div class="listen-word" id="listen-word">Ready</div>
+          <div class="listen-phonetic" id="listen-phonetic"></div>
+          <div class="listen-meaning" id="listen-meaning">点击下方播放按钮开始磨耳朵</div>
+          <div class="listen-example" id="listen-example"></div>
+
+          <div class="listen-controls">
+            <button class="btn btn-ghost" id="listen-prev-btn">上一词</button>
+            <button class="btn btn-primary btn-lg" id="listen-play-btn">开始连播</button>
+            <button class="btn btn-ghost" id="listen-stop-btn">停止</button>
+            <button class="btn btn-ghost" id="listen-next-btn">下一词</button>
+          </div>
+        </div>
+      </section>
+
       <!-- View: Quiz & Listening -->
       <section id="view-quiz" class="view">
         <header class="view-header">
           <div>
-            <h1>测验与听写训练</h1>
-            <p class="subtitle">支持英汉选择、拼写填空与纯听力辨词三种模式</p>
+            <h1>测验与听写</h1>
+            <p class="subtitle">支持词义选择、拼写填空、听音辨词与语境例句四种模式</p>
           </div>
           <div class="header-actions">
             <select id="quiz-category" class="select-input">
@@ -278,22 +332,23 @@
               <option value="5">5 题</option>
               <option value="8" selected>8 题</option>
               <option value="12">12 题</option>
+              <option value="20">20 题</option>
             </select>
           </div>
         </header>
 
         <div class="mode-tabs">
-          <button class="mode-tab active" data-mode="choice">🎯 选择题测验</button>
-          <button class="mode-tab" data-mode="spelling">⌨️ 拼写填空</button>
-          <button class="mode-tab" data-mode="listening">🎧 听力练习</button>
-          <button class="mode-tab" data-mode="cloze">🧩 语境例句填空</button>
+          <button class="mode-tab active" data-mode="choice">选择题测验</button>
+          <button class="mode-tab" data-mode="spelling">拼写填空</button>
+          <button class="mode-tab" data-mode="listening">听力辨词</button>
+          <button class="mode-tab" data-mode="cloze">语境填空</button>
         </div>
 
         <div class="panel quiz-panel">
           <div id="quiz-start-screen" class="quiz-center">
             <h2 id="quiz-mode-title">选择题测验</h2>
             <p id="quiz-mode-desc">根据英文单词选出正确的中文释义，检验词汇反应速度。</p>
-            <button class="btn btn-primary btn-lg" id="quiz-start-btn">开始本组练习</button>
+            <button class="btn btn-primary btn-lg" id="quiz-start-btn">开始本组训练</button>
           </div>
 
           <div id="quiz-active-screen" class="hidden">
@@ -307,9 +362,9 @@
               <div id="quiz-prompt-sub" class="quiz-prompt-sub"></div>
               <div id="quiz-hint-text" class="quiz-hint-text hidden"></div>
               <div class="quiz-audio-row" id="quiz-audio-row">
-                <button class="btn btn-ghost" id="quiz-play-btn">🔊 播放发音</button>
-                <button class="btn btn-ghost" id="quiz-slow-btn">🐢 慢速 (0.75x)</button>
-                <button class="btn btn-ghost hidden" id="quiz-stop-btn">⏹ 停止</button>
+                <button class="btn btn-ghost" id="quiz-play-btn">播放发音</button>
+                <button class="btn btn-ghost" id="quiz-slow-btn">慢速 (0.75x)</button>
+                <button class="btn btn-ghost hidden" id="quiz-stop-btn">停止</button>
               </div>
             </div>
 
@@ -317,18 +372,17 @@
 
             <div id="quiz-spelling-box" class="quiz-spelling-box hidden">
               <input id="quiz-spelling-input" type="text" placeholder="请输入对应的英文单词，按 Enter 提交" autocomplete="off" />
-              <button type="button" class="btn btn-ghost" id="quiz-hint-btn">💡 提示</button>
-              <button class="btn btn-primary" id="quiz-spelling-submit">提交答案</button>
+              <button type="button" class="btn btn-ghost" id="quiz-hint-btn">提示</button>
+              <button class="btn btn-primary" id="quiz-spelling-submit">提交</button>
             </div>
 
             <div id="quiz-feedback" class="quiz-feedback hidden"></div>
             <div class="quiz-next-row">
-              <button class="btn btn-primary hidden" id="quiz-next-btn">下一题 →</button>
+              <button class="btn btn-primary hidden" id="quiz-next-btn">下一题</button>
             </div>
           </div>
 
           <div id="quiz-result-screen" class="quiz-center hidden">
-            <div class="empty-icon">🏆</div>
             <h2 id="quiz-final-score">本组得分：8 / 8</h2>
             <p id="quiz-final-msg">正确率 100%，继续保持！</p>
             <div id="quiz-review-list" class="quiz-review-list"></div>
@@ -341,13 +395,13 @@
       <section id="view-dialogues" class="view">
         <header class="view-header">
           <div>
-            <h1>情景对话实战</h1>
-            <p class="subtitle">真实生活与职场高频场景，支持逐句朗读与连贯播放</p>
+            <h1>情景口语实战</h1>
+            <p class="subtitle">12 组真实生活与职场场景 · 逐句跟读录音 · 角色扮演对话</p>
           </div>
           <div class="header-actions">
             <label class="toggle-label">
               <input type="checkbox" id="dlg-roleplay-toggle" />
-              🎭 角色扮演 (静音 You 跟读)
+              角色扮演 (静音 You 跟读)
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="dlg-show-zh" checked />
@@ -366,8 +420,10 @@
                 <h2 id="dlg-title" style="margin-top: 8px;"></h2>
               </div>
               <div class="dlg-controls">
-                <button class="btn btn-primary" id="dlg-play-all-btn">▶ 连续播放</button>
-                <button class="btn btn-ghost hidden" id="dlg-stop-btn">⏹ 停止</button>
+                <button class="btn btn-ghost btn-sm-ctrl" id="dlg-record-btn" type="button">整段跟读录音</button>
+                <button class="btn btn-ghost btn-sm-ctrl hidden" id="dlg-playback-btn" type="button">回放我的录音</button>
+                <button class="btn btn-primary" id="dlg-play-all-btn">连续播放</button>
+                <button class="btn btn-ghost hidden" id="dlg-stop-btn">停止</button>
               </div>
             </div>
             <div id="dlg-lines" class="dlg-lines"></div>
@@ -383,8 +439,8 @@
       <section id="view-grammar" class="view">
         <header class="view-header">
           <div>
-            <h1>实用语法指南</h1>
-            <p class="subtitle">聚焦高频核心语法、双语例句朗读与常见易错点</p>
+            <h1>实用语法手册</h1>
+            <p class="subtitle">12 节核心语法专题 · 双语例句朗读 · 即学即练自测</p>
           </div>
         </header>
 
@@ -400,7 +456,7 @@
             </div>
             <p class="gram-summary" id="gram-summary"></p>
             <div class="gram-section">
-              <h3>核心规则精讲</h3>
+              <h3>规则精讲</h3>
               <pre class="gram-explanation" id="gram-explanation"></pre>
             </div>
             <div class="gram-section">
@@ -408,11 +464,11 @@
               <div id="gram-examples" class="gram-examples"></div>
             </div>
             <div class="gram-section mistakes-box">
-              <h3>⚠️ 常见易错点</h3>
+              <h3>常见易错点</h3>
               <ul id="gram-mistakes"></ul>
             </div>
             <div class="gram-section minicheck-box" id="gram-minicheck">
-              <h3>🎯 即学即练 (Mini-Check)</h3>
+              <h3>即学即练</h3>
               <div id="gram-check-question" class="gram-check-q"></div>
               <div id="gram-check-options" class="gram-check-opts"></div>
               <div id="gram-check-feedback" class="quiz-feedback hidden"></div>
@@ -425,18 +481,18 @@
       <section id="view-wordbook" class="view">
         <header class="view-header">
           <div>
-            <h1>词库管理</h1>
-            <p class="subtitle">搜索、收藏、编辑自定义单词或批量导入导出词表</p>
+            <h1>词海词库管理</h1>
+            <p class="subtitle">全阶段 15,000+ 词库检索 · 收藏与错题筛选 · 自定义词表导入导出</p>
           </div>
           <div class="header-actions">
-            <button class="btn btn-ghost" id="open-export-modal">📤 导出词库</button>
-            <button class="btn btn-ghost" id="open-import-modal">📥 批量导入</button>
-            <button class="btn btn-primary" id="open-add-modal">＋ 添加单词</button>
+            <button class="btn btn-ghost" id="open-export-modal">导出词库</button>
+            <button class="btn btn-ghost" id="open-import-modal">批量导入</button>
+            <button class="btn btn-primary" id="open-add-modal">添加单词</button>
           </div>
         </header>
 
         <div class="toolbar">
-          <input id="wb-search" type="search" class="search-input" placeholder="搜索英文单词、中文释义或例句..." />
+          <input id="wb-search" type="search" class="search-input" placeholder="搜索英文单词、中文释义、例句或笔记..." />
           <select id="wb-category" class="select-input">
             <option value="全部">全部分类</option>
           </select>
@@ -449,13 +505,19 @@
               <tr>
                 <th>单词 / 音标</th>
                 <th>词性与释义</th>
-                <th>分类</th>
+                <th>词书分类</th>
                 <th>记忆状态</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody id="wb-tbody"></tbody>
           </table>
+        </div>
+
+        <div class="pagination-bar">
+          <button class="btn btn-ghost btn-xs" id="wb-prev-page">上一页</button>
+          <span id="wb-page-info" class="wb-count">第 1 / 1 页</span>
+          <button class="btn btn-ghost btn-xs" id="wb-next-page">下一页</button>
         </div>
       </section>
     </main>
@@ -550,7 +612,7 @@
         </label>
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" onclick="closeModal('export-modal')">关闭</button>
-          <button type="button" class="btn btn-primary" id="copy-export-btn">📋 一键复制</button>
+          <button type="button" class="btn btn-primary" id="copy-export-btn">一键复制</button>
         </div>
       </div>
     </div>

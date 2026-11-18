@@ -37,6 +37,16 @@ class LingoFlowApi:
     def get_words(self, search: str = "", category: str = "全部") -> list[dict[str, Any]]:
         return self.db.get_words(search=search, category=category)
 
+    def get_words_paged(
+        self, search: str = "", category: str = "全部", page: int = 1, page_size: int = 50
+    ) -> dict[str, Any]:
+        return self.db.get_words_paged(
+            search=search, category=category, page=int(page), page_size=int(page_size)
+        )
+
+    def get_listen_words(self, category: str = "全部", limit: int = 40) -> list[dict[str, Any]]:
+        return self.db.get_listen_words(category=category, limit=int(limit))
+
     def add_word(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.db.add_word(payload)
 

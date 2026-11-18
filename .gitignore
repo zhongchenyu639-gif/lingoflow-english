@@ -12,3 +12,6 @@ LingoFlow.exe
 LingoFlow-iOS.ipa
 LingoFlow-macOS.dmg
 LingoFlow-Android.apk
+tools/ecdict.csv
+tools/openvoice_v2/
+tools/_voice_tmp/

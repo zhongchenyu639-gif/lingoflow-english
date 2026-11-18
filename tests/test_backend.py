@@ -41,10 +41,17 @@ class TestLingoFlowBackend(unittest.TestCase):
 
     def test_seed_data_and_dashboard(self) -> None:
         dash = self.api.get_dashboard()
-        self.assertGreaterEqual(dash["total_words"], 60)
-        self.assertEqual(dash["due_words"], dash["total_words"])
-        self.assertGreaterEqual(len(self.api.get_dialogues()), 6)
-        self.assertGreaterEqual(len(self.api.get_grammar_notes()), 8)
+        self.assertGreaterEqual(dash["total_words"], 15000)
+        self.assertEqual(dash["due_words"], dash["daily_goal"])
+        self.assertGreaterEqual(len(self.api.get_dialogues()), 12)
+        self.assertGreaterEqual(len(self.api.get_grammar_notes()), 12)
+        self.assertIn("xp", dash)
+        self.assertIn("badges", dash)
+        paged = self.api.get_words_paged(page=1, page_size=25)
+        self.assertEqual(len(paged["items"]), 25)
+        self.assertGreaterEqual(paged["total"], 15000)
+        listen_list = self.api.get_listen_words(limit=10)
+        self.assertEqual(len(listen_list), 10)
 
     def test_flashcard_review_flow(self) -> None:
         cards = self.api.get_due_flashcards(limit=5)
@@ -56,22 +63,23 @@ class TestLingoFlowBackend(unittest.TestCase):
 
         dash = self.api.get_dashboard()
         self.assertEqual(dash["today_count"], 1)
-        self.assertEqual(dash["due_words"], dash["total_words"] - 1)
+        self.assertEqual(dash["learned_words"], 1)
+        self.assertEqual(dash["due_words"], dash["daily_goal"] - 1)
 
     def test_wordbook_crud_and_import(self) -> None:
         created = self.api.add_word(
             {
-                "word": "resilient",
-                "phonetic": "/rɪˈzɪliənt/",
-                "part_of_speech": "adj.",
-                "meaning_zh": "有韧性的",
+                "word": "lingoflowtestword",
+                "phonetic": "/ˈlɪŋɡəʊ/",
+                "part_of_speech": "n.",
+                "meaning_zh": "测试自定义词汇",
                 "category": "自定义",
             }
         )
-        self.assertEqual(created["word"], "resilient")
+        self.assertEqual(created["word"], "lingoflowtestword")
 
         imp = self.api.import_words_text(
-            "serendipity | 意外惊喜 | /ˌserənˈdɪpəti/\nresilient | 重复词应跳过\nbadline\n",
+            "lingoflowimportword | 批量导入测试词 | /tɛst/\nlingoflowtestword | 重复词应跳过\nbadline\n",
             category="自定义",
         )
         self.assertEqual(imp["added"], 1)

@@ -79,6 +79,25 @@ for _item in _EXTRA_WORDS:
         _seen_words.add(_key)
         SEED_WORDS.append(_item)
 
+import gzip as _gzip
+import json as _json
+import sys as _sys
+from pathlib import Path as _Path
+
+_ecdict_candidates = [
+    _Path(__file__).resolve().parent / "ecdict_core.json.gz",
+    _Path(getattr(_sys, "_MEIPASS", _Path(__file__).resolve().parent.parent)) / "backend" / "ecdict_core.json.gz",
+]
+for _ecdict_gz in _ecdict_candidates:
+    if _ecdict_gz.is_file():
+        with _gzip.open(_ecdict_gz, "rt", encoding="utf-8") as _f:
+            for _row in _json.load(_f):
+                _key = _row[0].strip().lower()
+                if _key not in _seen_words:
+                    _seen_words.add(_key)
+                    SEED_WORDS.append((_row[0], _row[1], _row[2], _row[3], "", "", _row[4], _row[5]))
+        break
+
 SEED_DIALOGUES = [
     {
         "title": "咖啡店点单 (Ordering at a Cafe)",
@@ -190,6 +209,109 @@ SEED_DIALOGUES = [
             {"en": "chef's special", "zh": "主厨特推菜"},
             {"en": "sparkling water", "zh": "气泡水"},
             {"en": "get the check", "zh": "结账/买单"},
+        ],
+    },
+    {
+        "title": "租房看房沟通 (Apartment Viewing)",
+        "scene": "生活实用",
+        "level": "中级 B1",
+        "lines": [
+            {"speaker": "Agent", "en": "Welcome! This is the one-bedroom apartment you inquired about.", "zh": "欢迎！这就是您之前咨询的一居室公寓。"},
+            {"speaker": "You", "en": "Thanks! It gets great natural light. Are utilities included in the rent?", "zh": "谢谢！采光真不错。水电煤气费包含在房租里吗？"},
+            {"speaker": "Agent", "en": "Water and heating are included, while electricity and Wi-Fi are separate.", "zh": "水费和暖气包含在内，电费和 Wi-Fi 需要单独缴纳。"},
+            {"speaker": "You", "en": "Got it. What is the minimum lease term and security deposit?", "zh": "明白了。最短租期是多久，押金是多少？"},
+            {"speaker": "Agent", "en": "It's a twelve-month lease with one month's rent as the deposit.", "zh": "租期至少十二个月，押金为一个月房租。"},
+            {"speaker": "You", "en": "That sounds reasonable. How close is the nearest subway station?", "zh": "听起来很合理。最近的地铁站有多远？"},
+        ],
+        "key_phrases": [
+            {"en": "utilities included", "zh": "水电等杂费全包"},
+            {"en": "lease term", "zh": "租期"},
+            {"en": "security deposit", "zh": "租房押金"},
+        ],
+    },
+    {
+        "title": "医院看病与买药 (Seeing a Doctor)",
+        "scene": "生活实用",
+        "level": "中级 B1",
+        "lines": [
+            {"speaker": "Doctor", "en": "Hello, what brings you in today?", "zh": "你好，今天哪里不舒服？"},
+            {"speaker": "You", "en": "I've had a sore throat and a mild fever since yesterday evening.", "zh": "从昨晚开始我就一直喉咙痛，还有点低烧。"},
+            {"speaker": "Doctor", "en": "Do you have any allergies to medication?", "zh": "您对什么药物过敏吗？"},
+            {"speaker": "You", "en": "No known allergies. Should I take anything specific for the fever?", "zh": "没有已知过敏史。发烧需要吃什么特别的药吗？"},
+            {"speaker": "Doctor", "en": "It looks like a common viral cold. Rest well and take this twice a day after meals.", "zh": "看起来是普通病毒性感冒。多休息，这个药饭后服用，每天两次。"},
+        ],
+        "key_phrases": [
+            {"en": "what brings you in?", "zh": "今天怎么过来了 / 哪里不舒服？"},
+            {"en": "sore throat", "zh": "喉咙痛"},
+            {"en": "twice a day after meals", "zh": "每日两次饭后服用"},
+        ],
+    },
+    {
+        "title": "银行开户与换汇 (At the Bank)",
+        "scene": "生活实用",
+        "level": "中级 B1",
+        "lines": [
+            {"speaker": "Teller", "en": "Good morning, how can I help you today?", "zh": "早上好，今天有什么可以帮您？"},
+            {"speaker": "You", "en": "I'd like to open a checking account and exchange some currency.", "zh": "我想开一个活期账户并兑换一些外币。"},
+            {"speaker": "Teller", "en": "Certainly. May I see your passport and proof of address?", "zh": "好的，请出示您的护照和住址证明。"},
+            {"speaker": "You", "en": "Here they are. Is there any monthly maintenance fee for this account?", "zh": "给您。这个账户有月度管理费吗？"},
+            {"speaker": "Teller", "en": "It's completely free as long as you keep a minimum balance of five hundred dollars.", "zh": "只要保持最低 500 美元的余额就完全免费。"},
+        ],
+        "key_phrases": [
+            {"en": "checking account", "zh": "活期/支票账户"},
+            {"en": "proof of address", "zh": "住址证明"},
+            {"en": "minimum balance", "zh": "最低余额"},
+        ],
+    },
+    {
+        "title": "网购退换货沟通 (Customer Support & Return)",
+        "scene": "日常出行",
+        "level": "中级 B1",
+        "lines": [
+            {"speaker": "Support", "en": "Thanks for contacting customer support. How may I assist you?", "zh": "感谢联系客服，请问有什么可以帮您？"},
+            {"speaker": "You", "en": "I received my order yesterday, but the headphones appear to be defective.", "zh": "我昨天收到了订单，但耳机似乎有故障。"},
+            {"speaker": "Support", "en": "I'm sorry to hear that! Would you prefer a replacement or a full refund?", "zh": "非常抱歉！您希望换货还是全额退款？"},
+            {"speaker": "You", "en": "A replacement would be great. Do I need to pay for return shipping?", "zh": "换货就好。退回运费需要我自己付吗？"},
+            {"speaker": "Support", "en": "Not at all. I've emailed you a prepaid return shipping label.", "zh": "完全不需要。我已经把预付费退货标签发到您邮箱了。"},
+        ],
+        "key_phrases": [
+            {"en": "defective", "zh": "有瑕疵的 / 有故障的"},
+            {"en": "full refund", "zh": "全额退款"},
+            {"en": "prepaid return label", "zh": "预付费退货标签"},
+        ],
+    },
+    {
+        "title": "电话预约与改期 (Rescheduling an Appointment)",
+        "scene": "职场商务",
+        "level": "初级 A2",
+        "lines": [
+            {"speaker": "Receptionist", "en": "Good afternoon, Bright Dental Clinic. How may I direct your call?", "zh": "下午好，明亮牙科诊所，请问有什么可以帮您？"},
+            {"speaker": "You", "en": "Hi, I have an appointment this Thursday at 2 PM, but I need to reschedule.", "zh": "你好，我预约了本周四下午两点，但我需要改期。"},
+            {"speaker": "Receptionist", "en": "No problem at all. Would next Monday morning work for you?", "zh": "没问题。下周一上午您方便吗？"},
+            {"speaker": "You", "en": "Next Monday at 10:30 AM would be ideal.", "zh": "下周一上午十点半非常合适。"},
+            {"speaker": "Receptionist", "en": "You're all set for Monday at 10:30. Have a great day!", "zh": "已经为您改到周一十点半了，祝您愉快！"},
+        ],
+        "key_phrases": [
+            {"en": "reschedule an appointment", "zh": "改期预约"},
+            {"en": "work for you", "zh": "对你来说方便/合适"},
+            {"en": "You're all set", "zh": "都为您安排好了"},
+        ],
+    },
+    {
+        "title": "商务谈判与报价 (Business Negotiation)",
+        "scene": "职场商务",
+        "level": "中高级 B2",
+        "lines": [
+            {"speaker": "Client", "en": "We reviewed your proposal, but the quote is slightly above our budget.", "zh": "我们看了你们的方案，但报价略高于我们的预算。"},
+            {"speaker": "You", "en": "I understand. If we commit to an annual contract, we can offer a 15% discount.", "zh": "我理解。如果签订年度合同，我们可以提供 15% 的折扣。"},
+            {"speaker": "Client", "en": "That helps a lot. Can you also guarantee priority support?", "zh": "这很有帮助。你们还能保证优先技术支持吗？"},
+            {"speaker": "You", "en": "Yes, dedicated support and quarterly reviews are included in that tier.", "zh": "可以，该套餐包含专属支持和每季度复盘。"},
+            {"speaker": "Client", "en": "Great, let's finalize the terms and get started next week.", "zh": "太好了，我们敲定条款后下周就开始吧。"},
+        ],
+        "key_phrases": [
+            {"en": "above our budget", "zh": "超出我们的预算"},
+            {"en": "annual contract", "zh": "年度合同"},
+            {"en": "finalize the terms", "zh": "敲定条款"},
         ],
     },
 ]
@@ -313,6 +435,63 @@ SEED_GRAMMAR = [
         ],
         "common_mistakes": [
             "注意：在正式或标准书面语中，虚拟条件句用 If I were... 而非 If I was...。",
+        ],
+    },
+    {
+        "title": "非谓语动词 (to do / doing / done)",
+        "category": "核心句法",
+        "level": "中级 B1",
+        "summary": "一个简单句只能有一个谓语动词，其余动作需变为不定式(表目的/将来)、动名词/现在分词(表主动/进行)或过去分词(表被动/完成)。",
+        "explanation": "1. to do（不定式）：表示目的、计划或尚未发生的动作（I came here to learn English.）。\n2. doing（动名词/现在分词）：可作主语或宾语，修饰名词时表示主动或正在进行（Speaking aloud helps memory.）。\n3. done（过去分词）：表示被动或已完成的状态（a spoken language 一门口头语言）。",
+        "examples": [
+            {"en": "Learning a language takes consistent practice.", "zh": "学习一门语言需要持续练习。（doing 作主语）"},
+            {"en": "I use flashcards to review new words.", "zh": "我用记忆卡片来复习新词。（to do 表目的）"},
+            {"en": "Here is the revised report you requested.", "zh": "这是您要求的修订版报告。（done 表被动完成）"},
+        ],
+        "common_mistakes": [
+            "错误：I enjoy to listen to music. → 正确：I enjoy listening to music.（enjoy 后只能接动名词 doing）",
+        ],
+    },
+    {
+        "title": "名词性从句 (that / what / whether)",
+        "category": "复合句",
+        "level": "中高级 B2",
+        "summary": "用整个句子充当主语、宾语或表语；核心区分：that 不充当成分且无实义，what 在从句中作主/宾/表语。",
+        "explanation": "1. that 引导：从句结构已经完整（I believe that practice makes perfect.）。\n2. what 引导：相当于 the thing that，在从句中缺主语或宾语时使用（What matters most is consistency.）。\n3. whether / if：表示“是否”（I wonder whether he will join us.）。",
+        "examples": [
+            {"en": "What you need right now is a clear daily routine.", "zh": "你现在最需要的是一个清晰的日常惯例。"},
+            {"en": "I'm not sure whether the flight is on time.", "zh": "我不确定航班是否准点。"},
+        ],
+        "common_mistakes": [
+            "错误：That he said is true. → 正确：What he said is true.（said 缺少宾语，必须用 what）",
+        ],
+    },
+    {
+        "title": "倒装句与强调句 (It is... that...)",
+        "category": "高级表达",
+        "level": "中高级 B2",
+        "summary": "用于突出句子重点或增强书面/演讲感染力，是高分写作和口语的常用加分句型。",
+        "explanation": "1. 强调句型：It is/was + 被强调部分 + that/who + 其余部分。\n2. 否定词置句首部分倒装：Never / Seldom / Not only + 助动词/情态动词 + 主语 + 动词原形。\n3. Only + 状语置句首也需部分倒装（Only in this way can we improve.）。",
+        "examples": [
+            {"en": "It is consistent practice that leads to fluency.", "zh": "正是持续的练习带来了流利度。"},
+            {"en": "Never have I seen such a helpful learning tool.", "zh": "我从未见过如此有用的学习工具。"},
+        ],
+        "common_mistakes": [
+            "错误：Only by practicing we can improve. → 正确：Only by practicing can we improve.（Only + 状语在句首，主句要部分倒装）",
+        ],
+    },
+    {
+        "title": "逻辑衔接词 (However / Therefore / Despite)",
+        "category": "写作与口语",
+        "level": "中级 B1",
+        "summary": "合理使用逻辑连接词能让你的英语表达条理分明，注意区分连词与介词的词性搭配。",
+        "explanation": "1. 转折：however（副词，常加逗号隔开）；although/though（连词，接完整句子）；despite / in spite of（介词，接名词或动名词）。\n2. 因果：therefore / thus（副词）；because（接句子）；because of / due to（接名词短语）。\n3. 递进：moreover / furthermore / in addition。",
+        "examples": [
+            {"en": "Despite the busy schedule, she reviews twenty words daily.", "zh": "尽管日程繁忙，她每天仍复习二十个单词。"},
+            {"en": "He practiced every morning; therefore, his listening improved rapidly.", "zh": "他每天早上都练习，因此听力提高得很快。"},
+        ],
+        "common_mistakes": [
+            "错误：Although he was tired, but he kept studying. → 正确：Although he was tired, he kept studying.（although 和 but 不能同时出现在同一句中）",
         ],
     },
 ]

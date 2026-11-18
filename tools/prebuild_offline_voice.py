@@ -142,14 +142,16 @@ def write_manifest(mapping: dict[str, str]) -> None:
 
 
 def main() -> None:
-    limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    force = "--force" in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    limit = int(args[0]) if len(args) > 0 else None
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     tmp_dir = ROOT / "tools" / "_voice_tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     texts = collect_texts(limit)
     t0 = time.time()
 
-    print(f"Preparing {len(texts)} items...", flush=True)
+    print(f"Preparing {len(texts)} items (force={force})...", flush=True)
     if True:
         ref_base = tmp_dir / "src_ref.mp3"
         if not ref_base.is_file():
@@ -168,7 +170,7 @@ def main() -> None:
             h = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
             mp3_name = f"{h}.mp3"
             mp3_path = OUT_DIR / mp3_name
-            if mp3_path.is_file() and mp3_path.stat().st_size > 200:
+            if not force and mp3_path.is_file() and mp3_path.stat().st_size > 200:
                 mapping[key] = f"assets/offline_voice/{mp3_name}"
             else:
                 pending.append((text, tmp_dir / f"{h}_base.mp3", mp3_path))
@@ -191,7 +193,7 @@ def main() -> None:
                     src_se=src_se,
                     tgt_se=tgt_se,
                     output_path=str(out_wav),
-                    tau=0.35,
+                    tau=0.8,
                 )
                 wav_to_mp3(out_wav, final_mp3)
                 mapping[key] = f"assets/offline_voice/{final_mp3.name}"

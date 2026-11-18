@@ -110,6 +110,8 @@ class Database:
             for ddl in (
                 "ALTER TABLE words ADD COLUMN is_favorite INTEGER DEFAULT 0",
                 "ALTER TABLE words ADD COLUMN notes TEXT DEFAULT ''",
+                "CREATE INDEX IF NOT EXISTS idx_words_cat ON words(category)",
+                "CREATE INDEX IF NOT EXISTS idx_words_due ON words(next_review_at)",
             ):
                 try:
                     conn.execute(ddl)
@@ -130,8 +132,9 @@ class Database:
                 [(*item, now_iso, now_iso) for item in SEED_WORDS],
             )
 
-            dlg_count = conn.execute("SELECT COUNT(*) FROM dialogues").fetchone()[0]
-            if dlg_count == 0:
+            existing_dlgs = {r[0] for r in conn.execute("SELECT title FROM dialogues").fetchall()}
+            new_dlgs = [d for d in SEED_DIALOGUES if d["title"] not in existing_dlgs]
+            if new_dlgs:
                 conn.executemany(
                     """
                     INSERT INTO dialogues (title, scene, level, lines_json, key_phrases_json)
@@ -145,12 +148,13 @@ class Database:
                             json.dumps(d["lines"], ensure_ascii=False),
                             json.dumps(d["key_phrases"], ensure_ascii=False),
                         )
-                        for d in SEED_DIALOGUES
+                        for d in new_dlgs
                     ],
                 )
 
-            gram_count = conn.execute("SELECT COUNT(*) FROM grammar_notes").fetchone()[0]
-            if gram_count == 0:
+            existing_grams = {r[0] for r in conn.execute("SELECT title FROM grammar_notes").fetchall()}
+            new_grams = [g for g in SEED_GRAMMAR if g["title"] not in existing_grams]
+            if new_grams:
                 conn.executemany(
                     """
                     INSERT INTO grammar_notes (
@@ -168,7 +172,7 @@ class Database:
                             json.dumps(g["examples"], ensure_ascii=False),
                             json.dumps(g["common_mistakes"], ensure_ascii=False),
                         )
-                        for g in SEED_GRAMMAR
+                        for g in new_grams
                     ],
                 )
 
@@ -205,8 +209,11 @@ class Database:
 
         with self._connect() as conn:
             total_words = conn.execute("SELECT COUNT(*) FROM words").fetchone()[0]
-            due_words = conn.execute(
-                "SELECT COUNT(*) FROM words WHERE next_review_at <= ?",
+            learned_words = conn.execute(
+                "SELECT COUNT(*) FROM words WHERE last_reviewed_at IS NOT NULL"
+            ).fetchone()[0]
+            review_due = conn.execute(
+                "SELECT COUNT(*) FROM words WHERE last_reviewed_at IS NOT NULL AND next_review_at <= ?",
                 (now_iso,),
             ).fetchone()[0]
             mastered_words = conn.execute(
@@ -258,10 +265,28 @@ class Database:
             cursor -= timedelta(days=1)
 
         accuracy = round((total_correct / total_answered) * 100) if total_answered > 0 else 0
+        unlearned = max(0, total_words - learned_words)
+        remaining_new_quota = min(unlearned, max(0, daily_goal - today_count))
+        due_words = review_due + remaining_new_quota
+
+        xp = total_correct * 10 + streak * 25 + mastered_words * 15
+        level = max(1, xp // 150 + 1)
+        titles = ["初学萌新", "词汇新星", "专注行者", "进阶学者", "口语达人", "词海领航", "语言大师"]
+        level_title = titles[min(len(titles) - 1, level - 1)]
+        badges = [
+            {"id": "first_step", "name": "初次启航", "desc": "完成首次学习记录", "unlocked": len(logs) > 0},
+            {"id": "streak_3", "name": "连签 3 天", "desc": "连续学习打卡 3 天", "unlocked": streak >= 3},
+            {"id": "learned_50", "name": "五十词斩", "desc": "累计学习 50 个词汇", "unlocked": learned_words >= 50},
+            {"id": "mastered_100", "name": "百词熟练", "desc": "熟练掌握 100 个词汇", "unlocked": mastered_words >= 100},
+            {"id": "fav_10", "name": "精挑细选", "desc": "收藏 10 个核心生词", "unlocked": favorites_count >= 10},
+            {"id": "acc_90", "name": "精准学霸", "desc": "累计正确率达到 90%", "unlocked": accuracy >= 90 and total_answered >= 10},
+        ]
 
         return {
             "total_words": total_words,
+            "learned_words": learned_words,
             "due_words": due_words,
+            "review_due": review_due,
             "mastered_words": mastered_words,
             "favorites_count": favorites_count,
             "mistakes_count": mistakes_count,
@@ -269,6 +294,10 @@ class Database:
             "daily_goal": daily_goal,
             "streak_days": streak,
             "accuracy": accuracy,
+            "xp": xp,
+            "level": level,
+            "level_title": level_title,
+            "badges": badges,
             "categories": categories,
             "weekly_activity": [
                 {"date": k[5:], "count": v} for k, v in daily_counts.items()
@@ -300,26 +329,31 @@ class Database:
                         """,
                         (limit,),
                     ).fetchall()
-            elif category and category != "全部":
-                rows = conn.execute(
-                    """
-                    SELECT * FROM words
-                    WHERE next_review_at <= ? AND category = ?
-                    ORDER BY next_review_at ASC, id ASC
-                    LIMIT ?
-                    """,
-                    (now_iso, category, limit),
-                ).fetchall()
             else:
-                rows = conn.execute(
-                    """
+                cat_clause = "AND category = ?" if (category and category != "全部") else ""
+                cat_params = (category,) if cat_clause else ()
+                due_rows = conn.execute(
+                    f"""
                     SELECT * FROM words
-                    WHERE next_review_at <= ?
+                    WHERE last_reviewed_at IS NOT NULL AND next_review_at <= ? {cat_clause}
                     ORDER BY next_review_at ASC, id ASC
                     LIMIT ?
                     """,
-                    (now_iso, limit),
+                    (now_iso, *cat_params, limit),
                 ).fetchall()
+                remaining = max(0, limit - len(due_rows))
+                new_rows = []
+                if remaining > 0:
+                    new_rows = conn.execute(
+                        f"""
+                        SELECT * FROM words
+                        WHERE last_reviewed_at IS NULL {cat_clause}
+                        ORDER BY id ASC
+                        LIMIT ?
+                        """,
+                        (*cat_params, remaining),
+                    ).fetchall()
+                rows = list(due_rows) + list(new_rows)
 
         cards = []
         for row in rows:
@@ -385,24 +419,63 @@ class Database:
             "next_review_at": result.next_review_at,
         }
 
-    def get_words(self, search: str = "", category: str = "全部") -> list[dict[str, Any]]:
-        query = "SELECT * FROM words WHERE 1=1"
+    def _build_word_filter(self, search: str = "", category: str = "全部") -> tuple[str, list[Any]]:
+        where = "WHERE 1=1"
         params: list[Any] = []
         if category == VIRTUAL_FAVORITES:
-            query += " AND is_favorite = 1"
+            where += " AND is_favorite = 1"
         elif category == VIRTUAL_MISTAKES:
-            query += " AND wrong_count > 0"
+            where += " AND wrong_count > 0"
         elif category and category != "全部":
-            query += " AND category = ?"
+            where += " AND category = ?"
             params.append(category)
         if search.strip():
             like = f"%{search.strip()}%"
-            query += " AND (word LIKE ? OR meaning_zh LIKE ? OR example_en LIKE ? OR notes LIKE ?)"
+            where += " AND (word LIKE ? OR meaning_zh LIKE ? OR example_en LIKE ? OR notes LIKE ?)"
             params.extend([like, like, like, like])
-        query += " ORDER BY id DESC"
+        return where, params
 
+    def get_words(self, search: str = "", category: str = "全部") -> list[dict[str, Any]]:
+        where, params = self._build_word_filter(search, category)
+        query = f"SELECT * FROM words {where} ORDER BY id ASC"
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_words_paged(
+        self,
+        search: str = "",
+        category: str = "全部",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        page = max(1, int(page))
+        page_size = max(10, min(200, int(page_size)))
+        where, params = self._build_word_filter(search, category)
+        with self._connect() as conn:
+            total = conn.execute(f"SELECT COUNT(*) FROM words {where}", params).fetchone()[0]
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            page = min(page, total_pages)
+            offset = (page - 1) * page_size
+            rows = conn.execute(
+                f"SELECT * FROM words {where} ORDER BY id ASC LIMIT ? OFFSET ?",
+                (*params, page_size, offset),
+            ).fetchall()
+        return {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
+
+    def get_listen_words(self, category: str = "全部", limit: int = 40) -> list[dict[str, Any]]:
+        where, params = self._build_word_filter("", category)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM words {where} ORDER BY id ASC LIMIT ?",
+                (*params, int(limit)),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def add_word(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -101,8 +101,8 @@ class LingoFlowApi:
     def update_settings(self, updates: dict[str, Any]) -> dict[str, str]:
         return self.db.update_settings(updates)
 
-    def speak_fallback(self, text: str, rate: float = 1.0) -> dict[str, Any]:
-        return speak_windows_sapi(text=text, rate=float(rate))
+    def speak_fallback(self, text: str, rate: float = 1.0, lang: str = "en-US") -> dict[str, Any]:
+        return speak_windows_sapi(text=text, rate=float(rate), lang=lang)
 
     def stop_speaking(self) -> dict[str, bool]:
         return stop_windows_sapi()

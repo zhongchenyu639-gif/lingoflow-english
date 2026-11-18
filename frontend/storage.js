@@ -13,6 +13,7 @@
     auto_play: "0",
     mic_calibration: "",
     listen_sort: "shuffle",
+    listen_read_zh: "1",
   };
 
   const _PAK_LRU_LIMIT = 24;
@@ -732,8 +733,32 @@
         return { ...us.settings };
       },
 
-      async speak_fallback() {
+      async speak_fallback(text, rate = 1.0, lang = "en-US") {
+        const bridge = globalScope.AndroidTtsBridge;
+        if (bridge && typeof bridge.speak === "function") {
+          return new Promise((resolve) => {
+            const seq = bridge.speak(String(text || ""), Number(rate) || 1.0, String(lang || "en-US"));
+            if (!seq) {
+              resolve({ ok: true, stopped: false });
+              return;
+            }
+            const prev = globalScope.__onAndroidTtsDone;
+            const timer = setTimeout(() => resolve({ ok: true, stopped: false }), 12000);
+            globalScope.__onAndroidTtsDone = (doneSeq, stopped) => {
+              if (prev) try { prev(doneSeq, stopped); } catch {}
+              if (doneSeq === seq) {
+                clearTimeout(timer);
+                resolve({ ok: true, stopped: Boolean(stopped) });
+              }
+            };
+          });
+        }
         return { ok: true, stopped: false };
+      },
+
+      async stop_speaking() {
+        try { globalScope.AndroidTtsBridge?.stop(); } catch {}
+        return { ok: true };
       },
 
       async get_offline_audio(text, accent = "us-neural") {
@@ -768,10 +793,6 @@
         const [off, len] = span;
         const slice = new Uint8Array(entry.buffer, entry.dataOffset + off, len);
         return { ok: true, audio_b64: uint8ToBase64(slice), mime: "audio/mpeg" };
-      },
-
-      async stop_speaking() {
-        return { ok: true };
       },
 
       async synthesize_cloned_speech(text, customSampleB64 = "", refText = "") {

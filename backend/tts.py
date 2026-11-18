@@ -62,8 +62,8 @@ def stop_windows_sapi() -> dict[str, bool]:
     return {"ok": True}
 
 
-def speak_windows_sapi(text: str, rate: float = 1.0) -> dict[str, Any]:
-    """Speak English text clearly at full volume using Windows System.Speech."""
+def speak_windows_sapi(text: str, rate: float = 1.0, lang: str = "en-US") -> dict[str, Any]:
+    """Speak English or Chinese text clearly at full volume using Windows System.Speech."""
     global _ACTIVE_PROC
     clean_text = (text or "").strip()
     if not clean_text:
@@ -73,13 +73,14 @@ def speak_windows_sapi(text: str, rate: float = 1.0) -> dict[str, Any]:
 
     sapi_rate = max(-6, min(6, round((rate - 1.0) * 6)))
     escaped = clean_text.replace("\r", " ").replace("\n", " ").replace("'", "''")
+    culture = "zh-CN" if (lang or "").lower().startswith("zh") else "en-US"
     ps_script = (
         "Add-Type -AssemblyName System.Speech; "
         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
         "$s.Volume = 100; "
         f"$s.Rate = {sapi_rate}; "
         "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Female, "
-        "[System.Speech.Synthesis.VoiceAge]::Adult, 0, [System.Globalization.CultureInfo]'en-US') } catch {}; "
+        f"[System.Speech.Synthesis.VoiceAge]::Adult, 0, [System.Globalization.CultureInfo]'{culture}') }} catch {{}}; "
         f"$s.Speak('{escaped}')"
     )
 

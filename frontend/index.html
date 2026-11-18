@@ -85,9 +85,11 @@
         <header class="view-header">
           <div>
             <h1>今日学习计划</h1>
-            <p class="subtitle">全阶段分级词库 · SM-2 间隔重复 · 离线个人声纹跟读</p>
+            <p class="subtitle">全阶段 15,272 词库 · SM-2 间隔重复 · 播音级离线语音 · 多邻国式跟读评级</p>
           </div>
           <div class="header-actions">
+            <button class="btn btn-ghost hidden" id="dash-mistakes-btn">攻克错题 (0)</button>
+            <button class="btn btn-ghost hidden" id="dash-favorites-btn">⭐ 复习收藏 (0)</button>
             <button class="btn btn-ghost" onclick="navigateTo('listen')">打开随身听</button>
             <button class="btn btn-primary" onclick="navigateTo('flashcards')">开始今日记忆</button>
           </div>
@@ -137,15 +139,15 @@
               <button class="quick-card" onclick="navigateTo('flashcards')">
                 <div class="qc-badge">记忆</div>
                 <div>
-                  <div class="qc-title">记忆卡片 & 跟读录音</div>
-                  <div class="qc-desc">正反翻转 + 个人音色 + 麦克风跟读对比</div>
+                  <div class="qc-title">记忆卡片 & 跟读定级</div>
+                  <div class="qc-desc">SM-2 复习 + 音节拆解 + 发音校准评级</div>
                 </div>
               </button>
               <button class="quick-card" onclick="navigateTo('listen')">
                 <div class="qc-badge">听力</div>
                 <div>
                   <div class="qc-title">随身听磨耳朵</div>
-                  <div class="qc-desc">按词书连续循环播报，支持暂停与切词</div>
+                  <div class="qc-desc">随机打乱 / 自由排序 + 英汉双语离线连播</div>
                 </div>
               </button>
               <button class="quick-card" onclick="startQuickQuiz('choice')">
@@ -180,7 +182,7 @@
         <header class="view-header">
           <div>
             <h1>记忆卡片</h1>
-            <p class="subtitle">快捷键：Space 翻卡 · R 朗读 · 1-4 记忆评级（支持麦克风跟读对比）</p>
+            <p class="subtitle">快捷键：Space 翻卡 · R 朗读 · G 跟读定级 · 1-4 记忆评级</p>
           </div>
           <div class="header-actions">
             <label class="toggle-label">
@@ -217,6 +219,7 @@
               <div class="fc-face fc-front">
                 <div class="fc-tag" id="fc-cat-tag">日常高频</div>
                 <div class="fc-word" id="fc-word">consistent</div>
+                <div class="fc-syllables word-cell-sub" id="fc-syllables"></div>
                 <div class="fc-phonetic-row">
                   <span class="fc-phonetic" id="fc-phonetic">/kənˈsɪstənt/</span>
                   <span class="fc-pos" id="fc-pos">adj.</span>
@@ -331,6 +334,14 @@
             </select>
             <button class="btn btn-ghost btn-sm-ctrl" id="listen-reshuffle-btn" type="button">🔀 打乱重排</button>
             <label class="toggle-label">
+              <input type="checkbox" id="listen-read-zh" checked />
+              读完播报中文
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="listen-blind-toggle" />
+              盲听自测 (隐藏文本)
+            </label>
+            <label class="toggle-label">
               <input type="checkbox" id="listen-loop" checked />
               列表循环
             </label>
@@ -425,7 +436,8 @@
 
             <div id="quiz-feedback" class="quiz-feedback hidden"></div>
             <div class="quiz-next-row">
-              <button class="btn btn-primary hidden" id="quiz-next-btn">下一题</button>
+              <button class="btn btn-ghost hidden" id="quiz-fb-fav-btn" type="button">☆ 收藏此词</button>
+              <button class="btn btn-primary hidden" id="quiz-next-btn">下一题 (Enter)</button>
             </div>
           </div>
 
@@ -433,7 +445,10 @@
             <h2 id="quiz-final-score">本组得分：8 / 8</h2>
             <p id="quiz-final-msg">正确率 100%，继续保持！</p>
             <div id="quiz-review-list" class="quiz-review-list"></div>
-            <button class="btn btn-primary" id="quiz-restart-btn">再来一组</button>
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+              <button class="btn btn-ghost hidden" id="quiz-retry-wrong-btn" type="button">🔁 只重练错题</button>
+              <button class="btn btn-primary" id="quiz-restart-btn">再来一组</button>
+            </div>
           </div>
         </div>
       </section>
@@ -452,6 +467,10 @@
             <label class="toggle-label">
               <input type="checkbox" id="dlg-roleplay-toggle" />
               角色扮演 (静音 You 跟读)
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="dlg-hide-en" />
+              盲听模式 (隐藏英文)
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="dlg-show-zh" checked />
@@ -543,7 +562,10 @@
               <ul id="gram-mistakes"></ul>
             </div>
             <div class="gram-section minicheck-box" id="gram-minicheck">
-              <h3>即学即练</h3>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <h3>即学即练</h3>
+                <button type="button" class="btn btn-ghost btn-xs" id="gram-next-check-btn">换一题练</button>
+              </div>
               <div id="gram-check-question" class="gram-check-q"></div>
               <div id="gram-check-options" class="gram-check-opts"></div>
               <div id="gram-check-feedback" class="quiz-feedback hidden"></div>

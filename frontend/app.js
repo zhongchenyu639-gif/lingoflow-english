@@ -11,6 +11,7 @@ const state = {
     auto_play: "0",
     mic_calibration: "",
     listen_sort: "shuffle",
+    listen_read_zh: "1",
   },
   categories: [],
   favoritesCount: 0,
@@ -151,13 +152,25 @@ function stopClonedAudioElement() {
 function speakWithStandardTTS(clean, rate, fallbackLang, myToken, finish) {
   state.isUsingClonedAudio = false;
   const isDesktop = typeof window.pywebview !== "undefined";
+  const targetNorm = String(fallbackLang || "en-US").replace("_", "-").toLowerCase();
+  const langPrefix = targetNorm.split("-")[0];
+
+  // Android native TextToSpeech bridge (works reliably offline for zh-CN & en fallback)
+  if (!isDesktop && window.AndroidTtsBridge && typeof window.AndroidTtsBridge.speak === "function") {
+    api()
+      .speak_fallback(clean, rate, fallbackLang)
+      .then((res) => finish(!res?.stopped))
+      .catch(() => finish(false));
+    return;
+  }
+
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
     const voices = window.speechSynthesis.getVoices();
     const localVoices = voices.filter((v) => v.localService !== false);
     const matched =
-      localVoices.find((v) => v.lang === fallbackLang) ||
-      localVoices.find((v) => v.lang.replace("_", "-").toLowerCase().startsWith("en"));
+      localVoices.find((v) => v.lang.replace("_", "-").toLowerCase() === targetNorm) ||
+      localVoices.find((v) => v.lang.replace("_", "-").toLowerCase().startsWith(langPrefix));
 
     if (matched || (!isDesktop && voices.length === 0)) {
       const utter = new SpeechSynthesisUtterance(clean);
@@ -173,7 +186,7 @@ function speakWithStandardTTS(clean, rate, fallbackLang, myToken, finish) {
           return;
         }
         api()
-          .speak_fallback(clean, rate)
+          .speak_fallback(clean, rate, fallbackLang)
           .then((res) => finish(!res?.stopped))
           .catch(() => finish(false));
       };
@@ -183,12 +196,12 @@ function speakWithStandardTTS(clean, rate, fallbackLang, myToken, finish) {
   }
 
   api()
-    .speak_fallback(clean, rate)
+    .speak_fallback(clean, rate, fallbackLang)
     .then((res) => finish(!res?.stopped))
     .catch(() => finish(false));
 }
 
-function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读...") {
+function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读...", forceLang = null) {
   const clean = (text || "").trim();
   if (!clean) return Promise.resolve(false);
 
@@ -203,7 +216,7 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
   const rate = customRate ?? parseFloat(state.settings.tts_rate || "1.0");
   const accent = normalizeAccent(state.settings.tts_accent);
   const isGB = accent === "gb-neural";
-  const langCode = isGB ? "en-GB" : "en-US";
+  const langCode = forceLang || (isGB ? "en-GB" : "en-US");
 
   return new Promise((resolve) => {
     const finish = (completedNormally) => {
@@ -215,6 +228,11 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
       }
       resolve(completedNormally && myToken === state.speechToken);
     };
+
+    if (forceLang && forceLang.toLowerCase().startsWith("zh")) {
+      speakWithStandardTTS(clean, rate, forceLang, myToken, finish);
+      return;
+    }
 
     const voiceMap = isGB ? window.OFFLINE_VOICE_MAP_GB : window.OFFLINE_VOICE_MAP;
     const offlineRel = voiceMap?.[clean.toLowerCase()];
@@ -312,7 +330,7 @@ function stopAllSpeech() {
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
-  if (window.pywebview?.api?.stop_speaking) {
+  if (typeof api()?.stop_speaking === "function") {
     api().stop_speaking().catch(() => {});
   }
   document.querySelectorAll(".dlg-line").forEach((el) => el.classList.remove("speaking"));
@@ -329,7 +347,7 @@ function togglePauseSpeech() {
     }
     stopClonedAudioElement();
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    if (window.pywebview?.api?.stop_speaking) api().stop_speaking().catch(() => {});
+    if (typeof api()?.stop_speaking === "function") api().stop_speaking().catch(() => {});
     state.isSpeakingSingle = false;
     updateAudioControllerUI();
     return;
@@ -349,7 +367,7 @@ function togglePauseSpeech() {
     }
     stopClonedAudioElement();
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    if (window.pywebview?.api?.stop_speaking) api().stop_speaking().catch(() => {});
+    if (typeof api()?.stop_speaking === "function") api().stop_speaking().catch(() => {});
     state.isSpeakingSingle = false;
     updateAudioControllerUI();
     return;
@@ -452,6 +470,10 @@ async function loadDashboard() {
   if (listenSortEl && data.settings.listen_sort) {
     listenSortEl.value = data.settings.listen_sort;
   }
+  const listenReadZhEl = document.getElementById("listen-read-zh");
+  if (listenReadZhEl) {
+    listenReadZhEl.checked = (data.settings.listen_read_zh ?? "1") !== "0";
+  }
   if (data.settings.mic_calibration) {
     try {
       localStorage.setItem("lingoflow_mic_cal_v1", data.settings.mic_calibration);
@@ -471,6 +493,16 @@ async function loadDashboard() {
   document.getElementById("stat-streak").textContent = data.streak_days;
   document.getElementById("stat-accuracy").textContent = data.accuracy;
 
+  const mistBtn = document.getElementById("dash-mistakes-btn");
+  if (mistBtn) {
+    mistBtn.textContent = `📕 攻克错题 (${data.mistakes_count || 0})`;
+    mistBtn.classList.toggle("hidden", !(data.mistakes_count > 0));
+  }
+  const favBtn = document.getElementById("dash-favorites-btn");
+  if (favBtn) {
+    favBtn.textContent = `⭐ 复习收藏 (${data.favorites_count || 0})`;
+    favBtn.classList.toggle("hidden", !(data.favorites_count > 0));
+  }
   const xp = data.xp ?? 0;
   const lvl = data.level ?? 1;
   const title = data.level_title || "初学萌新";
@@ -532,6 +564,18 @@ function updateFlashcardFavoriteButton(card) {
   btn.classList.toggle("fav-btn-active", fav);
 }
 
+function syllabifyWord(word) {
+  const clean = String(word || "").trim();
+  if (!clean || clean.includes(" ") || clean.length <= 4 || !/^[a-zA-Z]+$/.test(clean)) return clean;
+  const syl = clean
+    .replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/i, "")
+    .match(/[bcdfghjklmnpqrstvwxz]*[aeiouy]+(?:[bcdfghjklmnpqrstvwxz](?![aeiouy]))*/gi);
+  if (!syl || syl.length <= 1) return clean;
+  return clean
+    .replace(/([aeiouy])([bcdfghjklmnpqrstvwxz][aeiouy])/gi, "$1·$2")
+    .replace(/([bcdfghjklmnpqrstvwxz])([bcdfghjklmnpqrstvwxz][aeiouy])/gi, "$1·$2");
+}
+
 function renderFlashcard() {
   const total = state.flashcards.length;
   const emptyEl = document.getElementById("fc-empty");
@@ -564,13 +608,22 @@ function renderFlashcard() {
 
   document.getElementById("fc-cat-tag").textContent = card.category;
   document.getElementById("fc-word").textContent = card.word;
+  const sylEl = document.getElementById("fc-syllables");
+  if (sylEl) {
+    const broken = syllabifyWord(card.word);
+    sylEl.textContent = broken !== card.word ? `音节拼读：${broken}` : "";
+  }
   document.getElementById("fc-word-back").textContent = card.word;
   document.getElementById("fc-phonetic").textContent = card.phonetic || "";
   document.getElementById("fc-phonetic-back").textContent = card.phonetic || "";
   document.getElementById("fc-pos").textContent = card.part_of_speech || "vocab";
   document.getElementById("fc-meaning").textContent = card.meaning_zh;
-  document.getElementById("fc-example-en").textContent = card.example_en || "暂无例句";
-  document.getElementById("fc-example-zh").textContent = card.example_zh || "";
+  const hasEx = Boolean(card.example_en && card.example_en.trim());
+  const diffStars = "★".repeat(Math.max(1, Math.min(3, card.difficulty || 1))) + "☆".repeat(Math.max(0, 3 - (card.difficulty || 1)));
+  document.getElementById("fc-example-en").textContent = hasEx
+    ? card.example_en
+    : `音节记忆：${syllabifyWord(card.word)}   ·   词汇难度：${diffStars}`;
+  document.getElementById("fc-example-zh").textContent = hasEx ? card.example_zh || "" : `核心释义：${card.meaning_zh}`;
   document.getElementById("fc-notes-input").value = card.notes || "";
 
   const prev = card.interval_previews || {};
@@ -664,6 +717,7 @@ function renderQuizQuestion() {
   document.getElementById("quiz-progress").textContent = `第 ${state.quizIndex + 1} / ${state.quizQuestions.length} 题`;
   document.getElementById("quiz-score-live").textContent = `得分: ${state.quizScore}`;
   document.getElementById("quiz-feedback").classList.add("hidden");
+  document.getElementById("quiz-fb-fav-btn")?.classList.add("hidden");
   document.getElementById("quiz-next-btn").classList.add("hidden");
 
   const hintEl = document.getElementById("quiz-hint-text");
@@ -785,6 +839,11 @@ function showQuizFeedback(isCorrect, q) {
     ? `✅ 回答正确！<strong>${escapeHtml(q.word)}</strong> — ${escapeHtml(q.meaning_zh)}`
     : `❌ 正确答案是 <strong>${escapeHtml(q.word)}</strong>（${escapeHtml(q.meaning_zh)}）`;
   fb.classList.remove("hidden");
+  const favBtn = document.getElementById("quiz-fb-fav-btn");
+  if (favBtn) {
+    favBtn.textContent = q.is_favorite ? "⭐ 已收藏" : "☆ 收藏此词";
+    favBtn.classList.remove("hidden");
+  }
   document.getElementById("quiz-score-live").textContent = `得分: ${state.quizScore}`;
   document.getElementById("quiz-next-btn").classList.remove("hidden");
 }
@@ -805,6 +864,8 @@ async function nextQuizQuestion() {
   const pct = Math.round((state.quizScore / total) * 100);
   document.getElementById("quiz-final-score").textContent = `本组得分：${state.quizScore} / ${total}`;
   document.getElementById("quiz-final-msg").textContent = `正确率 ${pct}%${pct >= 80 ? "，表现非常出色！" : "，错题已记录到「易错词本」，多复习巩固吧！"}`;
+  const hasWrong = state.quizOutcomes.some((o) => !o.correct);
+  document.getElementById("quiz-retry-wrong-btn")?.classList.toggle("hidden", !hasWrong);
   renderQuizReviewList();
 }
 
@@ -816,6 +877,7 @@ function renderQuizReviewList() {
       <div class="review-row">
         <span><strong>${escapeHtml(o.word)}</strong> · ${escapeHtml(o.meaning_zh)}</span>
         <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-icon sm" data-review-speak="${idx}" title="朗读发音">🔊</button>
           <button class="btn-icon sm ${o.is_favorite ? "fav-btn-active" : ""}" data-review-fav="${idx}" title="收藏单词">
             ${o.is_favorite ? "⭐" : "☆"}
           </button>
@@ -824,6 +886,14 @@ function renderQuizReviewList() {
       </div>`
     )
     .join("");
+
+  container.querySelectorAll("[data-review-speak]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.reviewSpeak, 10);
+      const item = state.quizOutcomes[idx];
+      if (item?.word) speakText(item.word);
+    });
+  });
 
   container.querySelectorAll("[data-review-fav]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -882,6 +952,7 @@ function renderDialogueDetail() {
   const dlg = state.dialogues[state.activeDialogueIndex];
   if (!dlg) return;
   const showZh = document.getElementById("dlg-show-zh").checked;
+  const hideEn = Boolean(document.getElementById("dlg-hide-en")?.checked);
   document.getElementById("dlg-title").textContent = dlg.title;
   document.getElementById("dlg-level").textContent = dlg.level;
   document.getElementById("dlg-scene").textContent = dlg.scene;
@@ -893,7 +964,7 @@ function renderDialogueDetail() {
       <div class="dlg-line" id="dlg-line-${idx}">
         <div style="flex:1;min-width:0;">
           <div class="dlg-speaker">${escapeHtml(line.speaker)}</div>
-          <div class="dlg-en">${escapeHtml(line.en)}</div>
+          <div class="dlg-en ${hideEn ? "text-masked" : ""}" title="${hideEn ? "点击显示/遮挡英文" : ""}">${escapeHtml(line.en)}</div>
           <div class="dlg-zh ${showZh ? "" : "hidden"}">${escapeHtml(line.zh)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -1038,36 +1109,66 @@ function handleDialoguePlayPause() {
 }
 
 // Grammar & Mini-Check
-function buildGrammarMiniCheck(g) {
+let grammarCheckOffset = 0;
+
+function buildGrammarChecksList(g) {
+  const checks = [];
   for (const m of g.common_mistakes || []) {
     const match = m.match(/错误：(.+?)\s*→\s*正确：(.+?)(?:（|$)/);
     if (match) {
-      return {
+      checks.push({
         prompt: "请选择符合本节语法规则的正确表达：",
         options: [
           { text: match[2].trim(), correct: true },
           { text: match[1].trim(), correct: false },
         ],
         explanation: m,
-      };
+      });
     }
   }
-  const ex = g.examples?.[0]?.en || "If I were you, I would take that opportunity.";
-  const wrong = ex.includes("If I were")
-    ? ex.replace("If I were", "If I was")
-    : `${ex} (incorrect tense)`;
-  return {
-    prompt: "请选择更符合标准书面/口语规范的句子：",
-    options: [
-      { text: ex, correct: true },
-      { text: wrong, correct: false },
-    ],
-    explanation: (g.common_mistakes && g.common_mistakes[0]) || g.summary,
-  };
+  for (const ex of g.examples || []) {
+    if (!checks.length || checks.length < 2) {
+      const wrong = ex.en.includes("If I were")
+        ? ex.en.replace("If I were", "If I was")
+        : ex.en.replace(/\b(is|are|was|were|have|has|had|will|would)\b/i, (m) =>
+            ({ is: "are", are: "is", was: "were", were: "was", have: "has", has: "have", had: "have", will: "would", would: "will" }[m.toLowerCase()] || m)
+          );
+      if (wrong !== ex.en) {
+        checks.push({
+          prompt: `根据句意「${ex.zh}」，选出语法完全正确的句子：`,
+          options: [
+            { text: ex.en, correct: true },
+            { text: wrong, correct: false },
+          ],
+          explanation: g.summary,
+        });
+      }
+    }
+  }
+  if (!checks.length) {
+    const ex = g.examples?.[0]?.en || "If I were you, I would take that opportunity.";
+    checks.push({
+      prompt: "请选择符合语法规范的标准句型：",
+      options: [
+        { text: ex, correct: true },
+        { text: ex.replace(/\./g, "") + " (wrong structure).", correct: false },
+      ],
+      explanation: (g.common_mistakes && g.common_mistakes[0]) || g.summary,
+    });
+  }
+  return checks;
 }
 
-function renderGrammarMiniCheck(g) {
-  const check = buildGrammarMiniCheck(g);
+function buildGrammarMiniCheck(g, offset = 0) {
+  const list = buildGrammarChecksList(g);
+  return list[offset % list.length];
+}
+
+function renderGrammarMiniCheck(g, offset = 0) {
+  const checks = buildGrammarChecksList(g);
+  const check = checks[offset % checks.length];
+  const nextBtn = document.getElementById("gram-next-check-btn");
+  if (nextBtn) nextBtn.classList.toggle("hidden", checks.length <= 1);
   const shuffled = [...check.options].sort(() => Math.random() - 0.5);
   document.getElementById("gram-check-question").textContent = check.prompt;
   const optsEl = document.getElementById("gram-check-options");
@@ -1150,19 +1251,36 @@ async function loadGrammar() {
           <div style="font-weight:600;font-size:14.5px;">${escapeHtml(ex.en)}</div>
           <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">${escapeHtml(ex.zh)}</div>
         </div>
-        <button class="btn-icon sm" data-gram-ex="${i}">🔊</button>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn-icon sm" data-gram-shadow="${i}" title="跟读评分例句">🎙️</button>
+          <button class="btn-icon sm" data-gram-ex="${i}" title="朗读例句">🔊</button>
+        </div>
       </div>`
     )
     .join("");
   exEl.querySelectorAll("[data-gram-ex]").forEach((btn) => {
     btn.addEventListener("click", () => speakText(g.examples[parseInt(btn.dataset.gramEx, 10)].en));
   });
+  exEl.querySelectorAll("[data-gram-shadow]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const ex = g.examples[parseInt(btn.dataset.gramShadow, 10)];
+      if (!ex?.en) return;
+      state.wbShadowWord = { word: ex.en, phonetic: g.title, meaning_zh: ex.zh };
+      document.getElementById("modal-shadow-word").textContent = ex.en;
+      document.getElementById("modal-shadow-phonetic").textContent = ex.zh || "";
+      document.getElementById("wb-playback-btn")?.classList.add("hidden");
+      refreshCalibrationStatusBadges();
+      prepareEvalPanel("wb", ex.en);
+      openModal("shadow-modal");
+    });
+  });
 
   document.getElementById("gram-mistakes").innerHTML = g.common_mistakes
     .map((m) => `<li>${escapeHtml(m)}</li>`)
     .join("");
 
-  renderGrammarMiniCheck(g);
+  grammarCheckOffset = 0;
+  renderGrammarMiniCheck(g, 0);
 }
 
 // Wordbook (Paginated for 15,000+ words)
@@ -1395,12 +1513,33 @@ function renderListenStage() {
     return;
   }
   const w = list[state.listenIndex];
-  metaEl.textContent = `随身听 · ${state.listenIndex + 1} / ${list.length} · ${w.category}`;
+  const blind = Boolean(document.getElementById("listen-blind-toggle")?.checked);
+  metaEl.textContent = `随身听 · ${state.listenIndex + 1} / ${list.length} · ${w.category}${blind ? " · 盲听模式（点击模糊区偷看）" : ""}`;
   wordEl.textContent = w.word;
   phEl.textContent = `${w.phonetic || ""} ${w.part_of_speech || ""}`;
   meanEl.textContent = w.meaning_zh;
   exEl.textContent = w.example_en ? `${w.example_en} — ${w.example_zh || ""}` : "";
+  [wordEl, phEl, meanEl, exEl].forEach((el) => {
+    el.classList.remove("peek");
+    el.classList.toggle("text-masked", blind);
+  });
   renderListenQueue();
+}
+
+function cleanChineseMeaningForSpeech(meaningZh) {
+  const raw = String(meaningZh || "")
+    .replace(/\[[^\]]+\]/g, "")
+    .replace(/（[^）]*）/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\b(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|int|aux|pl|abbr|a|ad)\./gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!raw) return "";
+  const parts = raw
+    .split(/[；;]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.slice(0, 2).join("，");
 }
 
 async function runListenLoop(startIndex = 0) {
@@ -1432,6 +1571,24 @@ async function runListenLoop(startIndex = 0) {
         if (!slept || state.listenPlayState !== "playing") break;
       }
     }
+    if (state.listenPlayState !== "playing") break;
+
+    if (document.getElementById("listen-read-zh")?.checked) {
+      const zhText = cleanChineseMeaningForSpeech(w.meaning_zh);
+      if (zhText) {
+        const sleptPreZh = await cancellableSleep(350);
+        if (!sleptPreZh || state.listenPlayState !== "playing") break;
+        const zhRate = Math.min(1.2, Math.max(0.9, parseFloat(state.settings.tts_rate || "1.0")));
+        const okZh = await speakSingleInternal(
+          zhText,
+          zhRate,
+          `随身听中文 (${state.listenIndex + 1}/${state.listenWords.length})`,
+          "zh-CN"
+        );
+        if (!okZh || state.listenPlayState !== "playing") break;
+      }
+    }
+
     if (state.listenPlayState !== "playing") break;
     const slept = await cancellableSleep(1100);
     if (!slept || state.listenPlayState !== "playing") break;
@@ -1842,6 +1999,17 @@ function bindEvents() {
     loadDashboard();
   });
 
+  document.getElementById("dash-mistakes-btn")?.addEventListener("click", () => {
+    const fcCat = document.getElementById("fc-category");
+    if (fcCat) fcCat.value = VIRTUAL_MISTAKES;
+    navigateTo("flashcards");
+  });
+  document.getElementById("dash-favorites-btn")?.addEventListener("click", () => {
+    const fcCat = document.getElementById("fc-category");
+    if (fcCat) fcCat.value = VIRTUAL_FAVORITES;
+    navigateTo("flashcards");
+  });
+
   // Flashcards
   document.getElementById("fc-auto-play").addEventListener("change", async (e) => {
     state.settings = await api().update_settings({ auto_play: e.target.checked ? "1" : "0" });
@@ -1897,6 +2065,29 @@ function bindEvents() {
   });
   document.getElementById("quiz-start-btn").addEventListener("click", startQuiz);
   document.getElementById("quiz-restart-btn").addEventListener("click", startQuiz);
+  document.getElementById("quiz-retry-wrong-btn")?.addEventListener("click", () => {
+    const wrongIds = new Set(state.quizOutcomes.filter((o) => !o.correct).map((o) => o.word_id));
+    const retryQs = state.quizQuestions.filter((q) => wrongIds.has(q.id));
+    if (!retryQs.length) return;
+    state.quizQuestions = retryQs;
+    state.quizIndex = 0;
+    state.quizScore = 0;
+    state.quizOutcomes = [];
+    document.getElementById("quiz-result-screen").classList.add("hidden");
+    document.getElementById("quiz-active-screen").classList.remove("hidden");
+    renderQuizQuestion();
+  });
+  document.getElementById("quiz-fb-fav-btn")?.addEventListener("click", async () => {
+    const q = state.quizQuestions[state.quizIndex];
+    if (!q) return;
+    const res = await api().toggle_favorite(q.id);
+    q.is_favorite = res.is_favorite;
+    const lastOut = state.quizOutcomes[state.quizOutcomes.length - 1];
+    if (lastOut && lastOut.word_id === q.id) lastOut.is_favorite = res.is_favorite;
+    const favBtn = document.getElementById("quiz-fb-fav-btn");
+    if (favBtn) favBtn.textContent = res.is_favorite ? "⭐ 已收藏" : "☆ 收藏此词";
+    showToast(res.is_favorite ? "已加入我的收藏" : "已取消收藏");
+  });
   document.getElementById("quiz-next-btn").addEventListener("click", nextQuizQuestion);
   document.getElementById("quiz-hint-btn").addEventListener("click", showSpellingHint);
   document.getElementById("quiz-spelling-submit").addEventListener("click", handleSpellingSubmit);
@@ -1918,6 +2109,17 @@ function bindEvents() {
     loadDialogues();
   });
   document.getElementById("gram-cat-filter")?.addEventListener("change", loadGrammar);
+  document.getElementById("gram-next-check-btn")?.addEventListener("click", () => {
+    const g = state.grammarNotes[state.activeGrammarIndex];
+    if (!g) return;
+    grammarCheckOffset += 1;
+    renderGrammarMiniCheck(g, grammarCheckOffset);
+  });
+  document.getElementById("dlg-hide-en")?.addEventListener("change", renderDialogueDetail);
+  document.getElementById("dlg-lines")?.addEventListener("click", (e) => {
+    const masked = e.target.closest(".dlg-en.text-masked");
+    if (masked) masked.classList.toggle("peek");
+  });
   document.getElementById("dlg-show-zh").addEventListener("change", renderDialogueDetail);
   document.getElementById("dlg-play-all-btn").addEventListener("click", handleDialoguePlayPause);
   document.getElementById("dlg-stop-btn").addEventListener("click", stopAllSpeech);
@@ -1937,6 +2139,19 @@ function bindEvents() {
   document.getElementById("listen-limit")?.addEventListener("change", () => {
     stopAllSpeech();
     loadListenView();
+  });
+  document.getElementById("listen-read-zh")?.addEventListener("change", async (e) => {
+    try {
+      state.settings = await api().update_settings({ listen_read_zh: e.target.checked ? "1" : "0" });
+    } catch {}
+  });
+  document.getElementById("listen-blind-toggle")?.addEventListener("change", renderListenStage);
+  document.querySelector(".listen-stage")?.addEventListener("click", (e) => {
+    if (e.target.closest("button")) return;
+    if (!document.getElementById("listen-blind-toggle")?.checked) return;
+    ["listen-word", "listen-phonetic", "listen-meaning", "listen-example"].forEach((id) => {
+      document.getElementById(id)?.classList.toggle("peek");
+    });
   });
   document.getElementById("listen-reshuffle-btn")?.addEventListener("click", async () => {
     const wasPlaying = state.listenPlayState === "playing";
@@ -2094,20 +2309,41 @@ function bindEvents() {
     loadDashboard();
   });
 
-  // Global keyboard shortcuts (Escape stops playback everywhere; flashcard shortcuts in flashcards view)
+  // Global keyboard shortcuts (Escape stops playback everywhere; shortcuts for Flashcards & Quiz)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       stopAllSpeech();
       return;
     }
-    if (state.currentView !== "flashcards") return;
     if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+
+    if (state.currentView === "quiz") {
+      const activeScreen = document.getElementById("quiz-active-screen");
+      if (!activeScreen || activeScreen.classList.contains("hidden")) return;
+      if (!state.quizAnswered && ["1", "2", "3", "4"].includes(e.key) && state.quizMode !== "spelling") {
+        const opts = document.querySelectorAll("#quiz-options .quiz-opt");
+        const targetBtn = opts[parseInt(e.key, 10) - 1];
+        if (targetBtn && !targetBtn.disabled) targetBtn.click();
+      } else if (state.quizAnswered && e.key === "Enter") {
+        e.preventDefault();
+        nextQuizQuestion();
+      }
+      return;
+    }
+
+    if (state.currentView !== "flashcards") return;
     if (e.code === "Space") {
       e.preventDefault();
       flipFlashcard();
     } else if (e.key.toLowerCase() === "r") {
       const c = state.flashcards[state.fcIndex];
       if (c) speakText(c.word);
+    } else if (e.key.toLowerCase() === "g") {
+      const c = state.flashcards[state.fcIndex];
+      if (c) {
+        state.fcShadowTarget = c.word;
+        toggleShadowEvaluation("fc", c.word, document.getElementById("fc-record-btn"));
+      }
     } else if (state.fcFlipped && ["1", "2", "3", "4"].includes(e.key)) {
       const map = { "1": "again", "2": "hard", "3": "good", "4": "easy" };
       rateFlashcard(map[e.key]);

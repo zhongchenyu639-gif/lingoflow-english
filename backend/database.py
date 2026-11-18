@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
     "auto_play": "0",
     "mic_calibration": "",
     "listen_sort": "shuffle",
+    "listen_read_zh": "1",
 }
 
 

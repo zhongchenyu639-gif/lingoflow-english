@@ -1659,6 +1659,17 @@ body {
   gap: 6px;
 }
 
+.text-masked {
+  filter: blur(7px);
+  user-select: none;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.text-masked.peek {
+  filter: none;
+}
+
 .listen-queue-panel {
   max-width: 680px;
   margin: 16px auto 0;

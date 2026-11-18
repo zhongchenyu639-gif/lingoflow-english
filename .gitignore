@@ -6,7 +6,9 @@ dist/
 data/
 node_modules/
 ios/
+android/
 *.spec
 LingoFlow.exe
 LingoFlow-iOS.ipa
 LingoFlow-macOS.dmg
+LingoFlow-Android.apk

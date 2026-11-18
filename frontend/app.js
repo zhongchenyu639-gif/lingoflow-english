@@ -6,7 +6,7 @@ const state = {
   settings: {
     daily_goal: "15",
     tts_rate: "1.0",
-    tts_accent: "en-US",
+    tts_accent: "cloned-voice",
     theme: "light",
     auto_play: "0",
   },
@@ -32,9 +32,12 @@ const state = {
   speechToken: 0,
   isSpeakingSingle: false,
   isPausedSingle: false,
+  isUsingClonedAudio: false,
   activeAudioLabel: "",
   roleplayCancel: null,
 };
+
+const clonedAudio = new Audio();
 
 const api = () => window.pywebview?.api || window.localLingoApi;
 
@@ -110,62 +113,127 @@ function updateDialogueControlUI() {
   }
 }
 
+function stopClonedAudioElement() {
+  clonedAudio.onended = null;
+  clonedAudio.onerror = null;
+  try {
+    clonedAudio.pause();
+    clonedAudio.currentTime = 0;
+  } catch {}
+  state.isUsingClonedAudio = false;
+}
+
+function speakWithStandardTTS(clean, rate, fallbackLang, myToken, finish) {
+  state.isUsingClonedAudio = false;
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices();
+    const matched =
+      voices.find((v) => v.lang === fallbackLang) ||
+      voices.find((v) => v.lang.replace("_", "-").toLowerCase().startsWith("en"));
+
+    if (voices.length === 0 || matched) {
+      const utter = new SpeechSynthesisUtterance(clean);
+      window.__currentUtter = utter;
+      utter.lang = fallbackLang;
+      utter.rate = rate;
+      if (matched) utter.voice = matched;
+      utter.onend = () => finish(true);
+      utter.onerror = () => {
+        if (myToken !== state.speechToken) {
+          finish(false);
+          return;
+        }
+        api()
+          .speak_fallback(clean, rate)
+          .then((res) => finish(!res?.stopped))
+          .catch(() => finish(false));
+      };
+      window.speechSynthesis.speak(utter);
+      return;
+    }
+  }
+
+  api()
+    .speak_fallback(clean, rate)
+    .then((res) => finish(!res?.stopped))
+    .catch(() => finish(false));
+}
+
 function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读...") {
   const clean = (text || "").trim();
   if (!clean) return Promise.resolve(false);
 
+  stopClonedAudioElement();
   const myToken = ++state.speechToken;
   state.isSpeakingSingle = true;
   state.isPausedSingle = false;
+  state.isUsingClonedAudio = false;
   state.activeAudioLabel = label;
   updateAudioControllerUI();
 
   const rate = customRate ?? parseFloat(state.settings.tts_rate || "1.0");
-  const accent = state.settings.tts_accent || "en-US";
+  const accent = state.settings.tts_accent || "cloned-voice";
 
   return new Promise((resolve) => {
     const finish = (completedNormally) => {
       if (myToken === state.speechToken) {
         state.isSpeakingSingle = false;
         state.isPausedSingle = false;
+        state.isUsingClonedAudio = false;
         updateAudioControllerUI();
       }
       resolve(completedNormally && myToken === state.speechToken);
     };
 
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const voices = window.speechSynthesis.getVoices();
-      const matched =
-        voices.find((v) => v.lang === accent) ||
-        voices.find((v) => v.lang.startsWith("en"));
-
-      if (voices.length === 0 || matched) {
-        const utter = new SpeechSynthesisUtterance(clean);
-        window.__currentUtter = utter;
-        utter.lang = accent;
-        utter.rate = rate;
-        if (matched) utter.voice = matched;
-        utter.onend = () => finish(true);
-        utter.onerror = () => {
+    if (accent === "cloned-voice" && typeof api().synthesize_cloned_speech === "function") {
+      state.activeAudioLabel = "☁️ 正在云端克隆你的声音...";
+      updateAudioControllerUI();
+      api()
+        .synthesize_cloned_speech(clean, window.USER_VOICE_SAMPLE_B64 || "", window.USER_VOICE_REF_TEXT || "你好。")
+        .then((res) => {
           if (myToken !== state.speechToken) {
             finish(false);
             return;
           }
-          api()
-            .speak_fallback(clean, rate)
-            .then((res) => finish(!res?.stopped))
-            .catch(() => finish(false));
-        };
-        window.speechSynthesis.speak(utter);
-        return;
-      }
+          if (res?.ok && res.audio_b64) {
+            state.isUsingClonedAudio = true;
+            state.activeAudioLabel = label.startsWith("🔊 对话") ? label : "🎙️ 克隆语音播放中...";
+            updateAudioControllerUI();
+            clonedAudio.src = `data:audio/wav;base64,${res.audio_b64}`;
+            clonedAudio.playbackRate = rate;
+            clonedAudio.onended = () => finish(true);
+            clonedAudio.onerror = () => {
+              if (myToken !== state.speechToken) {
+                finish(false);
+                return;
+              }
+              speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+            };
+            clonedAudio.play().catch(() => {
+              if (myToken !== state.speechToken) {
+                finish(false);
+                return;
+              }
+              speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+            });
+            return;
+          }
+          showToast("云端克隆暂不可用，已切换标准英语发音");
+          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+        })
+        .catch(() => {
+          if (myToken !== state.speechToken) {
+            finish(false);
+            return;
+          }
+          showToast("云端克隆暂不可用，已切换标准英语发音");
+          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+        });
+      return;
     }
 
-    api()
-      .speak_fallback(clean, rate)
-      .then((res) => finish(!res?.stopped))
-      .catch(() => finish(false));
+    speakWithStandardTTS(clean, rate, accent === "cloned-voice" ? "en-US" : accent, myToken, finish);
   });
 }
 
@@ -192,6 +260,7 @@ function stopAllSpeech() {
   state.isPausedSingle = false;
   state.activeAudioLabel = "";
 
+  stopClonedAudioElement();
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -210,6 +279,7 @@ function togglePauseSpeech() {
       state.roleplayCancel();
       state.roleplayCancel = null;
     }
+    stopClonedAudioElement();
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -223,6 +293,18 @@ function togglePauseSpeech() {
 
   if (state.dialoguePlayState === "paused") {
     runDialogueLoop(state.dialogueLineIndex);
+    return;
+  }
+
+  if (state.isSpeakingSingle && state.isUsingClonedAudio) {
+    if (!state.isPausedSingle) {
+      clonedAudio.pause();
+      state.isPausedSingle = true;
+    } else {
+      clonedAudio.play().catch(() => {});
+      state.isPausedSingle = false;
+    }
+    updateAudioControllerUI();
     return;
   }
 
@@ -297,7 +379,7 @@ async function loadDashboard() {
   state.settings = data.settings;
   applyTheme(data.settings.theme || "light");
 
-  document.getElementById("tts-accent").value = data.settings.tts_accent || "en-US";
+  document.getElementById("tts-accent").value = data.settings.tts_accent || "cloned-voice";
   document.getElementById("tts-rate").value = data.settings.tts_rate || "1.0";
   document.getElementById("tts-rate-val").textContent = `${data.settings.tts_rate || "1.0"}x`;
   document.getElementById("daily-goal-input").value = data.daily_goal;
@@ -1038,6 +1120,39 @@ function bindEvents() {
 
   document.getElementById("tts-accent").addEventListener("change", async (e) => {
     state.settings = await api().update_settings({ tts_accent: e.target.value });
+  });
+
+  document.getElementById("play-voice-sample-btn").addEventListener("click", () => {
+    if (!window.USER_VOICE_SAMPLE_B64) {
+      showToast("未找到嵌入式原声样本");
+      return;
+    }
+    stopAllSpeech();
+    const myToken = ++state.speechToken;
+    state.isSpeakingSingle = true;
+    state.isPausedSingle = false;
+    state.isUsingClonedAudio = true;
+    state.activeAudioLabel = "🎵 正在试听你的原声样本";
+    updateAudioControllerUI();
+    clonedAudio.src = `data:audio/wav;base64,${window.USER_VOICE_SAMPLE_B64}`;
+    clonedAudio.playbackRate = 1.0;
+    clonedAudio.onended = () => {
+      if (myToken === state.speechToken) {
+        state.isSpeakingSingle = false;
+        state.isPausedSingle = false;
+        state.isUsingClonedAudio = false;
+        updateAudioControllerUI();
+      }
+    };
+    clonedAudio.onerror = () => {
+      if (myToken === state.speechToken) {
+        state.isSpeakingSingle = false;
+        state.isUsingClonedAudio = false;
+        updateAudioControllerUI();
+        showToast("原声样本播放失败");
+      }
+    };
+    clonedAudio.play().catch(() => showToast("原声样本播放失败"));
   });
 
   document.getElementById("tts-rate").addEventListener("input", (e) => {

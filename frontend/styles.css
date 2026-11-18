@@ -1362,7 +1362,8 @@ body {
     gap: 8px;
   }
 
-  .audio-controller {
+  .audio-controller,
+  #play-voice-sample-btn {
     grid-column: 1 / -1;
   }
 

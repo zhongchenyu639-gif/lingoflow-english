@@ -8,7 +8,7 @@
   const DEFAULT_SETTINGS = {
     daily_goal: "15",
     tts_rate: "1.0",
-    tts_accent: "en-US",
+    tts_accent: "cloned-voice",
     theme: "light",
     auto_play: "0",
   };
@@ -590,6 +590,98 @@
 
       async stop_speaking() {
         return { ok: true };
+      },
+
+      async synthesize_cloned_speech(text, customSampleB64 = "", refText = "") {
+        const clean = String(text || "").trim();
+        if (!clean) return { ok: false, error: "Empty text" };
+        const sampleB64 = customSampleB64 || globalScope.USER_VOICE_SAMPLE_B64 || "";
+        const ref = refText || globalScope.USER_VOICE_REF_TEXT || "你好。";
+        if (!sampleB64) return { ok: false, error: "Missing voice sample" };
+
+        const cacheKey = `${clean.toLowerCase()}|${sampleB64.slice(0, 32)}|${ref}`;
+        if (!createLocalLingoApi._audioCache) createLocalLingoApi._audioCache = new Map();
+        if (!createLocalLingoApi._uploadCache) createLocalLingoApi._uploadCache = new Map();
+        const audioCache = createLocalLingoApi._audioCache;
+        const uploadCache = createLocalLingoApi._uploadCache;
+
+        if (audioCache.has(cacheKey)) {
+          return { ok: true, audio_b64: audioCache.get(cacheKey), cached: true };
+        }
+
+        const F5_BASE = "https://mrfakename-e2-f5-tts.hf.space";
+        const b64ToBlob = (b64) => {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          return new Blob([bytes], { type: "audio/wav" });
+        };
+        const bufToB64 = (buf) => {
+          const bytes = new Uint8Array(buf);
+          let binary = "";
+          const chunk = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+          }
+          return btoa(binary);
+        };
+        const uploadSample = async (forceRefresh = false) => {
+          const uKey = `${sampleB64.length}:${sampleB64.slice(0, 32)}`;
+          if (!forceRefresh && uploadCache.has(uKey)) return uploadCache.get(uKey);
+          const fd = new FormData();
+          fd.append("files", b64ToBlob(sampleB64), "prompt.wav");
+          const res = await fetch(`${F5_BASE}/gradio_api/upload`, { method: "POST", body: fd });
+          const uploaded = await res.json();
+          if (!Array.isArray(uploaded) || !uploaded.length) throw new Error("Upload failed");
+          uploadCache.set(uKey, uploaded[0]);
+          return uploaded[0];
+        };
+        const runPredict = async (remotePath) => {
+          const callRes = await fetch(`${F5_BASE}/gradio_api/call/predict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              data: [{ path: remotePath, meta: { _type: "gradio.FileData" } }, ref, clean, false],
+            }),
+          });
+          const callData = await callRes.json();
+          if (!callData.event_id) throw new Error("Missing event_id");
+          const sseRes = await fetch(`${F5_BASE}/gradio_api/call/predict/${callData.event_id}`);
+          const sseText = await sseRes.text();
+          let currentEvent = "";
+          let audioUrl = "";
+          for (const rawLine of sseText.split(/\r?\n/)) {
+            const line = rawLine.trim();
+            if (line.startsWith("event:")) currentEvent = line.slice(6).trim();
+            else if (line.startsWith("data:") && currentEvent === "complete") {
+              const arr = JSON.parse(line.slice(5).trim());
+              if (Array.isArray(arr) && arr[0]) {
+                audioUrl = arr[0].url || `${F5_BASE}/gradio_api/file=${arr[0].path}`;
+              }
+              break;
+            } else if (line.startsWith("data:") && currentEvent === "error") {
+              throw new Error("Cloud TTS error");
+            }
+          }
+          if (!audioUrl) throw new Error("No audio URL returned");
+          const wavRes = await fetch(audioUrl);
+          return bufToB64(await wavRes.arrayBuffer());
+        };
+
+        try {
+          let remotePath = await uploadSample(false);
+          let b64;
+          try {
+            b64 = await runPredict(remotePath);
+          } catch {
+            remotePath = await uploadSample(true);
+            b64 = await runPredict(remotePath);
+          }
+          audioCache.set(cacheKey, b64);
+          return { ok: true, audio_b64: b64, cached: false };
+        } catch (err) {
+          return { ok: false, error: String(err) };
+        }
       },
     };
   }

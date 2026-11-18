@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import base64
+import sys
+from pathlib import Path
 from typing import Any
 
 from backend.database import Database
-from backend.tts import speak_windows_sapi, stop_windows_sapi
+from backend.tts import clone_voice_cloud, speak_windows_sapi, stop_windows_sapi
+
+
+def _default_prompt_wav_path() -> Path:
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    else:
+        base = Path(__file__).resolve().parent.parent
+    return base / "frontend" / "assets" / "user_voice_prompt.wav"
 
 
 class LingoFlowApi:
@@ -83,3 +94,22 @@ class LingoFlowApi:
 
     def stop_speaking(self) -> dict[str, bool]:
         return stop_windows_sapi()
+
+    def synthesize_cloned_speech(
+        self, text: str, custom_sample_b64: str = "", ref_text: str = "你好。"
+    ) -> dict[str, Any]:
+        if custom_sample_b64:
+            prompt_bytes = base64.b64decode(custom_sample_b64)
+        else:
+            wav_path = _default_prompt_wav_path()
+            if not wav_path.is_file():
+                return {"ok": False, "error": f"Missing voice sample: {wav_path}"}
+            prompt_bytes = wav_path.read_bytes()
+
+        cache_dir = self.db.db_path.parent / "voice_cache"
+        return clone_voice_cloud(
+            text=text,
+            prompt_wav_bytes=prompt_bytes,
+            ref_text=ref_text or "你好。",
+            cache_dir=cache_dir,
+        )

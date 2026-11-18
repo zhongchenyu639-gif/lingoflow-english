@@ -153,6 +153,25 @@ class TestLingoFlowBackend(unittest.TestCase):
         exported = self.api.export_words_text(category=VIRTUAL_FAVORITES)
         self.assertIn(target["word"], exported)
 
+    def test_cloned_speech_cache_hit(self) -> None:
+        import base64
+        import hashlib
+        from backend.tts import clone_voice_cloud
+
+        sample = b"RIFFdemo_prompt_wav"
+        text = "Hello cache test"
+        ref = "你好。"
+        prompt_hash = hashlib.sha1(sample).hexdigest()[:12]
+        cache_key = hashlib.sha1(f"{text.lower()}|{prompt_hash}|{ref}".encode("utf-8")).hexdigest()
+        cache_dir = Path(self.tmp_dir.name) / "voice_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / f"{cache_key}.wav").write_bytes(b"RIFFcached_audio_payload_1234567890_1234567890_123456")
+
+        res = clone_voice_cloud(text, sample, ref, cache_dir)
+        self.assertTrue(res["ok"])
+        self.assertTrue(res["cached"])
+        self.assertEqual(base64.b64decode(res["audio_b64"]), b"RIFFcached_audio_payload_1234567890_1234567890_123456")
+
 
 if __name__ == "__main__":
     unittest.main()

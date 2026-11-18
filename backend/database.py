@@ -25,6 +25,7 @@ DEFAULT_SETTINGS = {
     "theme": "light",
     "auto_play": "0",
     "mic_calibration": "",
+    "listen_sort": "shuffle",
 }
 
 
@@ -470,11 +471,24 @@ class Database:
             "total_pages": total_pages,
         }
 
-    def get_listen_words(self, category: str = "全部", limit: int = 40) -> list[dict[str, Any]]:
+    def get_listen_words(
+        self, category: str = "全部", limit: int = 40, sort_mode: str = "shuffle"
+    ) -> list[dict[str, Any]]:
+        order_map = {
+            "shuffle": "RANDOM()",
+            "due": "(wrong_count > 0) DESC, wrong_count DESC, next_review_at ASC, RANDOM()",
+            "freq_asc": "difficulty ASC, RANDOM()",
+            "freq_desc": "difficulty DESC, RANDOM()",
+            "alpha_asc": "LOWER(word) ASC",
+            "alpha_desc": "LOWER(word) DESC",
+            "newest": "id DESC",
+            "custom": "wrong_count DESC, id DESC",
+        }
+        order_sql = order_map.get(sort_mode, "RANDOM()")
         where, params = self._build_word_filter("", category)
         with self._connect() as conn:
             rows = conn.execute(
-                f"SELECT * FROM words {where} ORDER BY id ASC LIMIT ?",
+                f"SELECT * FROM words {where} ORDER BY {order_sql} LIMIT ?",
                 (*params, int(limit)),
             ).fetchall()
         return [dict(r) for r in rows]

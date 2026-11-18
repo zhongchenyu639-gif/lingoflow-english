@@ -44,8 +44,10 @@ class LingoFlowApi:
             search=search, category=category, page=int(page), page_size=int(page_size)
         )
 
-    def get_listen_words(self, category: str = "全部", limit: int = 40) -> list[dict[str, Any]]:
-        return self.db.get_listen_words(category=category, limit=int(limit))
+    def get_listen_words(
+        self, category: str = "全部", limit: int = 40, sort_mode: str = "shuffle"
+    ) -> list[dict[str, Any]]:
+        return self.db.get_listen_words(category=category, limit=int(limit), sort_mode=sort_mode)
 
     def add_word(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.db.add_word(payload)

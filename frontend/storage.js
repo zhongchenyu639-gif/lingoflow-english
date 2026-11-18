@@ -12,6 +12,7 @@
     theme: "light",
     auto_play: "0",
     mic_calibration: "",
+    listen_sort: "shuffle",
   };
 
   const _PAK_LRU_LIMIT = 24;
@@ -466,9 +467,36 @@
         };
       },
 
-      async get_listen_words(category = "全部", limit = 40) {
+      async get_listen_words(category = "全部", limit = 40, sortMode = "shuffle") {
         const us = loadUserStore();
-        return filterWords(getAllWords(us), "", category).slice(0, Number(limit) || 40);
+        let pool = filterWords(getAllWords(us), "", category);
+        if (sortMode === "alpha_asc") {
+          pool.sort((a, b) => a.word.toLowerCase().localeCompare(b.word.toLowerCase()));
+        } else if (sortMode === "alpha_desc") {
+          pool.sort((a, b) => b.word.toLowerCase().localeCompare(a.word.toLowerCase()));
+        } else if (sortMode === "freq_asc") {
+          pool = shuffleArray(pool);
+          pool.sort((a, b) => (a.difficulty || 1) - (b.difficulty || 1));
+        } else if (sortMode === "freq_desc") {
+          pool = shuffleArray(pool);
+          pool.sort((a, b) => (b.difficulty || 1) - (a.difficulty || 1));
+        } else if (sortMode === "due") {
+          pool = shuffleArray(pool);
+          pool.sort((a, b) => {
+            const wa = a.wrong_count > 0 ? 1 : 0;
+            const wb = b.wrong_count > 0 ? 1 : 0;
+            if (wa !== wb) return wb - wa;
+            if (a.wrong_count !== b.wrong_count) return b.wrong_count - a.wrong_count;
+            return String(a.next_review_at || "").localeCompare(String(b.next_review_at || ""));
+          });
+        } else if (sortMode === "newest") {
+          pool.sort((a, b) => b.id - a.id);
+        } else if (sortMode === "custom") {
+          pool.sort((a, b) => (b.wrong_count - a.wrong_count) || (b.id - a.id));
+        } else {
+          pool = shuffleArray(pool);
+        }
+        return pool.slice(0, Number(limit) || 40);
       },
 
       async add_word(payload) {

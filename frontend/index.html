@@ -310,10 +310,26 @@
             <select id="listen-category" class="select-input">
               <option value="全部">全部分类</option>
             </select>
+            <select id="listen-sort" class="select-input">
+              <option value="shuffle">🎲 随机打乱</option>
+              <option value="due">🧠 易错/待复习优先</option>
+              <option value="freq_asc">📚 由易到难</option>
+              <option value="freq_desc">🔥 由难到易</option>
+              <option value="newest">🆕 最新添加</option>
+              <option value="alpha_asc">🔤 字母 A → Z</option>
+              <option value="alpha_desc">🔠 字母 Z → A</option>
+              <option value="custom">✏️ 自定义顺序</option>
+            </select>
+            <select id="listen-limit" class="select-input">
+              <option value="60" selected>60 词/轮</option>
+              <option value="120">120 词/轮</option>
+              <option value="200">200 词/轮</option>
+            </select>
             <select id="listen-repeat" class="select-input">
               <option value="1">每词读 1 遍</option>
               <option value="2" selected>每词读 2 遍</option>
             </select>
+            <button class="btn btn-ghost btn-sm-ctrl" id="listen-reshuffle-btn" type="button">🔀 打乱重排</button>
             <label class="toggle-label">
               <input type="checkbox" id="listen-loop" checked />
               列表循环
@@ -334,6 +350,17 @@
             <button class="btn btn-ghost" id="listen-stop-btn">停止</button>
             <button class="btn btn-ghost" id="listen-next-btn">下一词</button>
           </div>
+        </div>
+
+        <div class="panel listen-queue-panel">
+          <div class="listen-queue-header">
+            <div>
+              <strong>当前播放队列</strong>
+              <span class="word-cell-sub" id="listen-queue-summary">（可点击任意词跳播，或用 ↑↓ 自由调整顺序）</span>
+            </div>
+            <button class="btn btn-ghost btn-xs" id="listen-queue-toggle" type="button">收起/展开队列</button>
+          </div>
+          <div class="listen-queue-list" id="listen-queue-list"></div>
         </div>
       </section>
 

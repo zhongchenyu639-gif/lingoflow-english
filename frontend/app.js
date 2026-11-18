@@ -10,6 +10,7 @@ const state = {
     theme: "light",
     auto_play: "0",
     mic_calibration: "",
+    listen_sort: "shuffle",
   },
   categories: [],
   favoritesCount: 0,
@@ -447,6 +448,10 @@ async function loadDashboard() {
   document.getElementById("tts-accent").value = normalizeAccent(data.settings.tts_accent);
   document.getElementById("tts-rate").value = data.settings.tts_rate || "1.0";
   document.getElementById("tts-rate-val").textContent = `${data.settings.tts_rate || "1.0"}x`;
+  const listenSortEl = document.getElementById("listen-sort");
+  if (listenSortEl && data.settings.listen_sort) {
+    listenSortEl.value = data.settings.listen_sort;
+  }
   if (data.settings.mic_calibration) {
     try {
       localStorage.setItem("lingoflow_mic_cal_v1", data.settings.mic_calibration);
@@ -1206,13 +1211,138 @@ function updateListenControlUI() {
   else playBtn.textContent = "开始连播";
 }
 
+const CUSTOM_LISTEN_KEY = "lingoflow_listen_custom_v1";
+
+function shuffleWords(list) {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function saveCustomListenOrder(words) {
+  try {
+    localStorage.setItem(CUSTOM_LISTEN_KEY, JSON.stringify(words.map((w) => w.word.toLowerCase())));
+  } catch {}
+}
+
+function applyCustomListenOrder(words) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CUSTOM_LISTEN_KEY) || "[]");
+    if (!Array.isArray(saved) || !saved.length) return words;
+    const rank = new Map();
+    saved.forEach((w, idx) => rank.set(String(w).toLowerCase(), idx));
+    return [...words].sort((a, b) => {
+      const ra = rank.has(a.word.toLowerCase()) ? rank.get(a.word.toLowerCase()) : 999999;
+      const rb = rank.has(b.word.toLowerCase()) ? rank.get(b.word.toLowerCase()) : 999999;
+      return ra - rb;
+    });
+  } catch {
+    return words;
+  }
+}
+
 async function loadListenView() {
   const cat = document.getElementById("listen-category").value;
-  state.listenWords = typeof api().get_listen_words === "function"
-    ? await api().get_listen_words(cat, 60)
-    : (await api().get_words("", cat)).slice(0, 60);
+  const sortMode = document.getElementById("listen-sort")?.value || state.settings.listen_sort || "shuffle";
+  const limit = parseInt(document.getElementById("listen-limit")?.value || "60", 10);
+
+  let words = typeof api().get_listen_words === "function"
+    ? await api().get_listen_words(cat, limit, sortMode)
+    : (await api().get_words("", cat)).slice(0, limit);
+
+  if (sortMode === "shuffle") {
+    words = shuffleWords(words);
+  } else if (sortMode === "custom") {
+    words = applyCustomListenOrder(words);
+  }
+
+  state.listenWords = words;
   state.listenIndex = 0;
   renderListenStage();
+}
+
+function renderListenQueue() {
+  const listEl = document.getElementById("listen-queue-list");
+  if (!listEl) return;
+  if (!state.listenWords.length) {
+    listEl.innerHTML = "";
+    return;
+  }
+  const sortSelect = document.getElementById("listen-sort");
+  const sortLabel = sortSelect?.options[sortSelect.selectedIndex]?.textContent || "随机打乱";
+  const sumEl = document.getElementById("listen-queue-summary");
+  if (sumEl) {
+    sumEl.textContent = `（${sortLabel} · 共 ${state.listenWords.length} 词，点词可跳播，↑↓ 可手动排序）`;
+  }
+
+  listEl.innerHTML = state.listenWords
+    .map(
+      (w, idx) => `
+      <div class="listen-queue-item ${idx === state.listenIndex ? "active" : ""}">
+        <div class="listen-queue-main" data-q-jump="${idx}">
+          <span class="listen-queue-idx">${idx + 1}.</span>
+          <span class="listen-queue-word">${escapeHtml(w.word)}</span>
+          <span class="listen-queue-zh">${escapeHtml(w.meaning_zh || "")}</span>
+        </div>
+        <div class="listen-queue-btns">
+          <button type="button" class="btn-icon sm" data-q-top="${idx}" title="置顶" ${idx === 0 ? "disabled" : ""}>⏫</button>
+          <button type="button" class="btn-icon sm" data-q-up="${idx}" title="上移" ${idx === 0 ? "disabled" : ""}>↑</button>
+          <button type="button" class="btn-icon sm" data-q-down="${idx}" title="下移" ${idx === state.listenWords.length - 1 ? "disabled" : ""}>↓</button>
+        </div>
+      </div>`
+    )
+    .join("");
+
+  listEl.querySelectorAll("[data-q-jump]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const targetIdx = parseInt(el.dataset.qJump, 10);
+      const wasPlaying = state.listenPlayState === "playing";
+      stopAllSpeech();
+      state.listenIndex = targetIdx;
+      renderListenStage();
+      if (wasPlaying) runListenLoop(targetIdx);
+      else speakText(state.listenWords[targetIdx].word);
+    });
+  });
+
+  const reorder = (fromIdx, toIdx) => {
+    if (toIdx < 0 || toIdx >= state.listenWords.length || fromIdx === toIdx) return;
+    const currentWord = state.listenWords[state.listenIndex]?.word;
+    const [moved] = state.listenWords.splice(fromIdx, 1);
+    state.listenWords.splice(toIdx, 0, moved);
+    if (currentWord) {
+      const found = state.listenWords.findIndex((x) => x.word === currentWord);
+      if (found >= 0) state.listenIndex = found;
+    }
+    saveCustomListenOrder(state.listenWords);
+    const sortEl = document.getElementById("listen-sort");
+    if (sortEl && sortEl.value !== "custom") {
+      sortEl.value = "custom";
+      api().update_settings({ listen_sort: "custom" }).then((s) => {
+        state.settings = s;
+      }).catch(() => {});
+    }
+    renderListenStage();
+  };
+
+  listEl.querySelectorAll("[data-q-top]").forEach((btn) => {
+    btn.addEventListener("click", () => reorder(parseInt(btn.dataset.qTop, 10), 0));
+  });
+  listEl.querySelectorAll("[data-q-up]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.qUp, 10);
+      reorder(i, i - 1);
+    });
+  });
+  listEl.querySelectorAll("[data-q-down]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.qDown, 10);
+      reorder(i, i + 1);
+    });
+  });
 }
 
 function renderListenStage() {
@@ -1229,6 +1359,7 @@ function renderListenStage() {
     phEl.textContent = "";
     meanEl.textContent = "请切换其他词书分类";
     exEl.textContent = "";
+    renderListenQueue();
     return;
   }
   const w = list[state.listenIndex];
@@ -1237,6 +1368,7 @@ function renderListenStage() {
   phEl.textContent = `${w.phonetic || ""} ${w.part_of_speech || ""}`;
   meanEl.textContent = w.meaning_zh;
   exEl.textContent = w.example_en ? `${w.example_en} — ${w.example_zh || ""}` : "";
+  renderListenQueue();
 }
 
 async function runListenLoop(startIndex = 0) {
@@ -1757,6 +1889,35 @@ function bindEvents() {
   document.getElementById("listen-category").addEventListener("change", () => {
     stopAllSpeech();
     loadListenView();
+  });
+  document.getElementById("listen-sort")?.addEventListener("change", async (e) => {
+    stopAllSpeech();
+    try {
+      state.settings = await api().update_settings({ listen_sort: e.target.value });
+    } catch {}
+    loadListenView();
+  });
+  document.getElementById("listen-limit")?.addEventListener("change", () => {
+    stopAllSpeech();
+    loadListenView();
+  });
+  document.getElementById("listen-reshuffle-btn")?.addEventListener("click", async () => {
+    const wasPlaying = state.listenPlayState === "playing";
+    stopAllSpeech();
+    const sortEl = document.getElementById("listen-sort");
+    if (sortEl && sortEl.value === "shuffle") {
+      await loadListenView();
+    } else if (state.listenWords.length) {
+      state.listenWords = shuffleWords(state.listenWords);
+      state.listenIndex = 0;
+      if (sortEl?.value === "custom") saveCustomListenOrder(state.listenWords);
+      renderListenStage();
+    }
+    showToast("播放列表已重新随机打乱");
+    if (wasPlaying) runListenLoop(0);
+  });
+  document.getElementById("listen-queue-toggle")?.addEventListener("click", () => {
+    document.getElementById("listen-queue-list")?.classList.toggle("hidden");
   });
   document.getElementById("listen-play-btn").addEventListener("click", () => {
     if (state.listenPlayState === "idle") runListenLoop(state.listenIndex);

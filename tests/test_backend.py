@@ -52,6 +52,11 @@ class TestLingoFlowBackend(unittest.TestCase):
         self.assertGreaterEqual(paged["total"], 15000)
         listen_list = self.api.get_listen_words(limit=10)
         self.assertEqual(len(listen_list), 10)
+        asc_words = [w["word"].lower() for w in self.api.get_listen_words(limit=15, sort_mode="alpha_asc")]
+        desc_words = [w["word"].lower() for w in self.api.get_listen_words(limit=15, sort_mode="alpha_desc")]
+        self.assertEqual(asc_words, sorted(asc_words))
+        self.assertEqual(desc_words, sorted(desc_words, reverse=True))
+        self.assertNotEqual(asc_words, desc_words)
 
     def test_flashcard_review_flow(self) -> None:
         cards = self.api.get_due_flashcards(limit=5)

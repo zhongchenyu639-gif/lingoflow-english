@@ -152,6 +152,37 @@
             parsed.settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
             parsed.study_logs = Array.isArray(parsed.study_logs) ? parsed.study_logs : [];
             parsed.nextWordId = parsed.nextWordId || (parsed.words.reduce((m, w) => Math.max(m, w.id || 0), 0) + 1);
+            const existingKeys = new Set(parsed.words.map((w) => String(w.word || "").trim().toLowerCase()));
+            const nowIso = new Date().toISOString();
+            let merged = false;
+            for (const sw of seed.words || []) {
+              const key = String(sw.word || "").trim().toLowerCase();
+              if (!key || existingKeys.has(key)) continue;
+              existingKeys.add(key);
+              parsed.words.push({
+                id: parsed.nextWordId++,
+                word: sw.word,
+                phonetic: sw.phonetic || "",
+                part_of_speech: sw.part_of_speech || "",
+                meaning_zh: sw.meaning_zh,
+                example_en: sw.example_en || "",
+                example_zh: sw.example_zh || "",
+                category: sw.category || "自定义",
+                difficulty: sw.difficulty || 1,
+                ease_factor: 2.5,
+                interval_days: 0,
+                repetitions: 0,
+                next_review_at: nowIso,
+                last_reviewed_at: null,
+                correct_count: 0,
+                wrong_count: 0,
+                is_favorite: 0,
+                notes: "",
+                created_at: nowIso,
+              });
+              merged = true;
+            }
+            if (merged) saveState(parsed);
             return parsed;
           }
         }

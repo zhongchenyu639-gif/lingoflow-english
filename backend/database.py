@@ -119,18 +119,16 @@ class Database:
     def _seed_if_empty(self) -> None:
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            word_count = conn.execute("SELECT COUNT(*) FROM words").fetchone()[0]
-            if word_count == 0:
-                conn.executemany(
-                    """
-                    INSERT INTO words (
-                        word, phonetic, part_of_speech, meaning_zh,
-                        example_en, example_zh, category, difficulty,
-                        next_review_at, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    [(*item, now_iso, now_iso) for item in SEED_WORDS],
-                )
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO words (
+                    word, phonetic, part_of_speech, meaning_zh,
+                    example_en, example_zh, category, difficulty,
+                    next_review_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [(*item, now_iso, now_iso) for item in SEED_WORDS],
+            )
 
             dlg_count = conn.execute("SELECT COUNT(*) FROM dialogues").fetchone()[0]
             if dlg_count == 0:

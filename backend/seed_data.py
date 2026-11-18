@@ -70,6 +70,15 @@ SEED_WORDS = [
     ("summarize", "/ˈsʌməraɪz/", "v.", "总结；概括", "Try to summarize the story in three sentences.", "试着用三句话总结这个故事。", "学术进阶", 1),
 ]
 
+from backend.seed_words_extra import EXTRA_WORDS as _EXTRA_WORDS
+
+_seen_words = {w[0].strip().lower() for w in SEED_WORDS}
+for _item in _EXTRA_WORDS:
+    _key = _item[0].strip().lower()
+    if _key not in _seen_words:
+        _seen_words.add(_key)
+        SEED_WORDS.append(_item)
+
 SEED_DIALOGUES = [
     {
         "title": "咖啡店点单 (Ordering at a Cafe)",

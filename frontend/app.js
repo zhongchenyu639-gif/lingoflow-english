@@ -186,6 +186,33 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
       resolve(completedNormally && myToken === state.speechToken);
     };
 
+    if (accent === "cloned-voice") {
+      const offlineRel = window.OFFLINE_VOICE_MAP?.[clean.toLowerCase()];
+      if (offlineRel) {
+        state.isUsingClonedAudio = true;
+        state.activeAudioLabel = label.startsWith("🔊 对话") ? label : "🎙️ 离线克隆语音...";
+        updateAudioControllerUI();
+        clonedAudio.src = offlineRel;
+        clonedAudio.playbackRate = rate;
+        clonedAudio.onended = () => finish(true);
+        clonedAudio.onerror = () => {
+          if (myToken !== state.speechToken) {
+            finish(false);
+            return;
+          }
+          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+        };
+        clonedAudio.play().catch(() => {
+          if (myToken !== state.speechToken) {
+            finish(false);
+            return;
+          }
+          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+        });
+        return;
+      }
+    }
+
     if (accent === "cloned-voice" && typeof api().synthesize_cloned_speech === "function") {
       state.activeAudioLabel = "☁️ 正在云端克隆你的声音...";
       updateAudioControllerUI();

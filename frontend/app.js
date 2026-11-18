@@ -6,9 +6,10 @@ const state = {
   settings: {
     daily_goal: "15",
     tts_rate: "1.0",
-    tts_accent: "cloned-voice",
+    tts_accent: "us-neural",
     theme: "light",
     auto_play: "0",
+    mic_calibration: "",
   },
   categories: [],
   favoritesCount: 0,
@@ -34,10 +35,14 @@ const state = {
   listenPlayState: "idle", // "idle" | "playing" | "paused"
   // Wordbook pagination
   wbPage: 1,
-  // Shadowing recorder
+  // Shadowing & Duolingo calibration recorder
   mediaRecorder: null,
   recordingTarget: null,
   recordedUrl: "",
+  shadowSession: null,
+  fcShadowTarget: "",
+  dlgShadowTarget: "",
+  wbShadowWord: null,
   // Audio control state
   speechToken: 0,
   isSpeakingSingle: false,
@@ -144,18 +149,21 @@ function stopClonedAudioElement() {
 
 function speakWithStandardTTS(clean, rate, fallbackLang, myToken, finish) {
   state.isUsingClonedAudio = false;
+  const isDesktop = typeof window.pywebview !== "undefined";
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
     const voices = window.speechSynthesis.getVoices();
+    const localVoices = voices.filter((v) => v.localService !== false);
     const matched =
-      voices.find((v) => v.lang === fallbackLang) ||
-      voices.find((v) => v.lang.replace("_", "-").toLowerCase().startsWith("en"));
+      localVoices.find((v) => v.lang === fallbackLang) ||
+      localVoices.find((v) => v.lang.replace("_", "-").toLowerCase().startsWith("en"));
 
-    if (voices.length === 0 || matched) {
+    if (matched || (!isDesktop && voices.length === 0)) {
       const utter = new SpeechSynthesisUtterance(clean);
       window.__currentUtter = utter;
       utter.lang = fallbackLang;
       utter.rate = rate;
+      utter.volume = 1.0;
       if (matched) utter.voice = matched;
       utter.onend = () => finish(true);
       utter.onerror = () => {
@@ -192,7 +200,9 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
   updateAudioControllerUI();
 
   const rate = customRate ?? parseFloat(state.settings.tts_rate || "1.0");
-  const accent = state.settings.tts_accent || "cloned-voice";
+  const accent = normalizeAccent(state.settings.tts_accent);
+  const isGB = accent === "gb-neural";
+  const langCode = isGB ? "en-GB" : "en-US";
 
   return new Promise((resolve) => {
     const finish = (completedNormally) => {
@@ -205,82 +215,71 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
       resolve(completedNormally && myToken === state.speechToken);
     };
 
-    if (accent === "cloned-voice") {
-      const offlineRel = window.OFFLINE_VOICE_MAP?.[clean.toLowerCase()];
-      if (offlineRel) {
-        state.isUsingClonedAudio = true;
-        state.activeAudioLabel = label.startsWith("🔊 对话") ? label : "🎙️ 离线克隆语音...";
-        updateAudioControllerUI();
-        clonedAudio.src = offlineRel;
-        clonedAudio.playbackRate = rate;
-        clonedAudio.onended = () => finish(true);
-        clonedAudio.onerror = () => {
-          if (myToken !== state.speechToken) {
-            finish(false);
-            return;
-          }
-          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
-        };
-        clonedAudio.play().catch(() => {
-          if (myToken !== state.speechToken) {
-            finish(false);
-            return;
-          }
-          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
-        });
-        return;
-      }
+    const voiceMap = isGB ? window.OFFLINE_VOICE_MAP_GB : window.OFFLINE_VOICE_MAP;
+    const offlineRel = voiceMap?.[clean.toLowerCase()];
+    const broadcastLabel = label.startsWith("🔊 对话") ? label : isGB ? "🔊 播音级英式发音..." : "🔊 播音级美式发音...";
+
+    const playBroadcast = (src) => {
+      state.isUsingClonedAudio = true;
+      state.activeAudioLabel = broadcastLabel;
+      updateAudioControllerUI();
+      clonedAudio.src = src;
+      clonedAudio.volume = 1.0;
+      clonedAudio.playbackRate = rate;
+      clonedAudio.onended = () => finish(true);
+      clonedAudio.onerror = () => {
+        if (myToken !== state.speechToken) {
+          finish(false);
+          return;
+        }
+        speakWithStandardTTS(clean, rate, langCode, myToken, finish);
+      };
+      clonedAudio.play().catch(() => {
+        if (myToken !== state.speechToken) {
+          finish(false);
+          return;
+        }
+        speakWithStandardTTS(clean, rate, langCode, myToken, finish);
+      });
+    };
+
+    if (offlineRel) {
+      playBroadcast(offlineRel);
+      return;
     }
 
-    if (accent === "cloned-voice" && typeof api().synthesize_cloned_speech === "function") {
-      state.activeAudioLabel = "☁️ 正在云端克隆你的声音...";
-      updateAudioControllerUI();
+    // Full-vocabulary offline voice pack (voice_packs/voice_us.db / voice_gb.db)
+    if (typeof api().get_offline_audio === "function") {
       api()
-        .synthesize_cloned_speech(clean, window.USER_VOICE_SAMPLE_B64 || "", window.USER_VOICE_REF_TEXT || "你好。")
+        .get_offline_audio(clean, accent)
         .then((res) => {
           if (myToken !== state.speechToken) {
             finish(false);
             return;
           }
           if (res?.ok && res.audio_b64) {
-            state.isUsingClonedAudio = true;
-            state.activeAudioLabel = label.startsWith("🔊 对话") ? label : "🎙️ 克隆语音播放中...";
-            updateAudioControllerUI();
-            clonedAudio.src = `data:audio/wav;base64,${res.audio_b64}`;
-            clonedAudio.playbackRate = rate;
-            clonedAudio.onended = () => finish(true);
-            clonedAudio.onerror = () => {
-              if (myToken !== state.speechToken) {
-                finish(false);
-                return;
-              }
-              speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
-            };
-            clonedAudio.play().catch(() => {
-              if (myToken !== state.speechToken) {
-                finish(false);
-                return;
-              }
-              speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
-            });
+            playBroadcast(`data:${res.mime || "audio/mpeg"};base64,${res.audio_b64}`);
             return;
           }
-          showToast("云端克隆暂不可用，已切换标准英语发音");
-          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+          speakWithStandardTTS(clean, rate, langCode, myToken, finish);
         })
         .catch(() => {
           if (myToken !== state.speechToken) {
             finish(false);
             return;
           }
-          showToast("云端克隆暂不可用，已切换标准英语发音");
-          speakWithStandardTTS(clean, rate, "en-US", myToken, finish);
+          speakWithStandardTTS(clean, rate, langCode, myToken, finish);
         });
       return;
     }
 
-    speakWithStandardTTS(clean, rate, accent === "cloned-voice" ? "en-US" : accent, myToken, finish);
+    speakWithStandardTTS(clean, rate, langCode, myToken, finish);
   });
+}
+
+// Map legacy engine values (cloned-voice / en-US / en-GB) to the two broadcast engines
+function normalizeAccent(value) {
+  return value === "gb-neural" || value === "en-GB" ? "gb-neural" : "us-neural";
 }
 
 // Public single-utterance helper: stops any active continuous dialogue first
@@ -445,9 +444,15 @@ async function loadDashboard() {
   state.settings = data.settings;
   applyTheme(data.settings.theme || "light");
 
-  document.getElementById("tts-accent").value = data.settings.tts_accent || "cloned-voice";
+  document.getElementById("tts-accent").value = normalizeAccent(data.settings.tts_accent);
   document.getElementById("tts-rate").value = data.settings.tts_rate || "1.0";
   document.getElementById("tts-rate-val").textContent = `${data.settings.tts_rate || "1.0"}x`;
+  if (data.settings.mic_calibration) {
+    try {
+      localStorage.setItem("lingoflow_mic_cal_v1", data.settings.mic_calibration);
+    } catch {}
+  }
+  refreshCalibrationStatusBadges();
   document.getElementById("daily-goal-input").value = data.daily_goal;
   document.getElementById("fc-auto-play").checked = data.settings.auto_play === "1";
 
@@ -572,6 +577,12 @@ function renderFlashcard() {
   if (document.getElementById("fc-auto-play").checked) {
     speakText(card.word);
   }
+  state.fcShadowTarget = card.word;
+  const exBtn = document.getElementById("fc-ex-record-btn");
+  if (exBtn) {
+    exBtn.classList.toggle("hidden", !(card.example_en && card.example_en.trim()));
+  }
+  prepareEvalPanel("fc", card.word);
 }
 
 function flipFlashcard() {
@@ -859,12 +870,15 @@ function renderDialogueDetail() {
     .map(
       (line, idx) => `
       <div class="dlg-line" id="dlg-line-${idx}">
-        <div>
+        <div style="flex:1;min-width:0;">
           <div class="dlg-speaker">${escapeHtml(line.speaker)}</div>
           <div class="dlg-en">${escapeHtml(line.en)}</div>
           <div class="dlg-zh ${showZh ? "" : "hidden"}">${escapeHtml(line.zh)}</div>
         </div>
-        <button class="btn-icon sm" data-speak-line="${idx}" title="朗读此句">🔊</button>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn-icon sm" data-shadow-line="${idx}" title="跟读评分此句">🎙️</button>
+          <button class="btn-icon sm" data-speak-line="${idx}" title="朗读此句">🔊</button>
+        </div>
       </div>`
     )
     .join("");
@@ -875,6 +889,22 @@ function renderDialogueDetail() {
       speakText(dlg.lines[i].en);
     });
   });
+
+  linesEl.querySelectorAll("[data-shadow-line]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.shadowLine, 10);
+      const lineText = dlg.lines[i].en;
+      state.dlgShadowTarget = lineText;
+      const panel = document.getElementById("dlg-eval-panel");
+      if (panel) panel.classList.remove("hidden");
+      prepareEvalPanel("dlg", lineText);
+      toggleShadowEvaluation("dlg", lineText);
+    });
+  });
+
+  state.dlgShadowTarget = dlg.lines.map((l) => l.en).join(" ");
+  const dlgPanel = document.getElementById("dlg-eval-panel");
+  if (dlgPanel) dlgPanel.classList.add("hidden");
 
   document.getElementById("dlg-phrases").innerHTML = dlg.key_phrases
     .map(
@@ -1148,6 +1178,7 @@ async function loadWordbook(resetPage = false) {
           <td>${status}</td>
           <td style="white-space:nowrap;">
             <button class="btn-icon sm" onclick="speakText(${JSON.stringify(w.word)})" title="发音">朗读</button>
+            <button class="btn-icon sm" onclick="openShadowModal(${w.id})" title="跟读校准评分">跟读</button>
             <button class="btn-icon sm ${favClass}" onclick="toggleWordFavorite(${w.id})" title="收藏">${w.is_favorite ? "★" : "☆"}</button>
             <button class="btn-icon sm" onclick="openEditWordModal(${w.id})" title="编辑">编辑</button>
             <button class="btn-icon sm" onclick="resetWord(${w.id})" title="重置进度">重置</button>
@@ -1242,58 +1273,289 @@ async function runListenLoop(startIndex = 0) {
   }
 }
 
-// Shadowing Recorder (口语跟读录音对比)
-async function toggleShadowRecord(target) {
-  const recBtn = document.getElementById(target === "fc" ? "fc-record-btn" : "dlg-record-btn");
-  const playBtn = document.getElementById(target === "fc" ? "fc-playback-btn" : "dlg-playback-btn");
+// Duolingo-style Pronunciation Calibration & Grade Controller
+function refreshCalibrationStatusBadges() {
+  const cal = window.LingoPronunciation?.loadCalibration();
+  const label = cal?.calibratedAt ? `已校准 · ${cal.envLabel}` : cal?.envLabel || "底噪待校准";
+  ["fc-cal-status", "dlg-cal-status", "wb-cal-status"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  });
+}
 
-  if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
-    state.mediaRecorder.stop();
-    recBtn.classList.remove("recording-active");
-    recBtn.textContent = target === "fc" ? "跟读录音" : "整段跟读录音";
-    return;
-  }
+async function runMicCalibration(contextKey) {
+  if (!window.LingoPronunciation) return;
+  const meter = document.getElementById(`${contextKey}-eval-meter`);
+  const meterLabel = document.getElementById(`${contextKey}-eval-meter-label`);
+  const meterFill = document.getElementById(`${contextKey}-eval-meter-fill`);
+  const asrPrev = document.getElementById(`${contextKey}-eval-asr-preview`);
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    showToast("当前环境不支持麦克风录音");
-    return;
+  if (contextKey === "dlg") {
+    document.getElementById("dlg-eval-panel")?.classList.remove("hidden");
   }
+  meter?.classList.remove("hidden");
+  if (asrPrev) asrPrev.textContent = "";
+  if (meterLabel) meterLabel.textContent = "正在校准麦克风环境底噪（请保持安静 1.4 秒）...";
 
   try {
-    stopAllSpeech();
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const chunks = [];
-    const mr = new MediaRecorder(stream);
-    state.mediaRecorder = mr;
-    state.recordingTarget = target;
-
-    mr.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) chunks.push(ev.data);
-    };
-    mr.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop());
-      const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
-      if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
-      state.recordedUrl = URL.createObjectURL(blob);
-      playBtn.classList.remove("hidden");
-      showToast("跟读录音完成，可点击回放对比");
-    };
-    mr.start();
-    recBtn.classList.add("recording-active");
-    recBtn.textContent = "录音中... 点击结束";
+    const cal = await window.LingoPronunciation.calibrateMicrophone((pct, level) => {
+      if (meterFill) meterFill.style.width = `${Math.max(6, Math.round(level * 100))}%`;
+      if (meterLabel) meterLabel.textContent = `环境底噪采样校准中 ${pct}%（请保持安静）...`;
+    });
+    meter?.classList.add("hidden");
+    if (meterFill) meterFill.style.width = "0%";
+    refreshCalibrationStatusBadges();
+    try {
+      const jsonCal = JSON.stringify(cal);
+      state.settings = await api().update_settings({ mic_calibration: jsonCal });
+    } catch {}
+    showToast(`麦克风校准完成：${cal.envLabel}`);
   } catch (err) {
-    showToast("无法访问麦克风，请检查系统录音权限");
+    meter?.classList.add("hidden");
+    showToast(err?.message || "无法访问麦克风，请检查系统录音权限");
+  }
+}
+
+function renderEvalWordChips(containerId, targetText, wordResults = null) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const tokens = wordResults
+    ? wordResults
+    : String(targetText || "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => ({ word: w, status: "neutral", score: null }));
+
+  el.innerHTML = tokens
+    .map((item) => {
+      const cls =
+        item.status === "ok"
+          ? "word-ok"
+          : item.status === "warn"
+          ? "word-warn"
+          : item.status === "miss"
+          ? "word-miss"
+          : "";
+      const mark = item.status === "ok" ? " ✓" : item.status === "warn" ? " ~" : item.status === "miss" ? " ✗" : "";
+      const title = item.score != null ? `得分 ${item.score} 分（点击听示范）` : "点击单独听示范";
+      return `<button type="button" class="eval-word-chip ${cls}" data-chip-word="${escapeHtml(item.word)}" title="${title}">${escapeHtml(item.word)}${mark}</button>`;
+    })
+    .join("");
+
+  el.querySelectorAll("[data-chip-word]").forEach((chip) => {
+    chip.addEventListener("click", () => speakText(chip.dataset.chipWord));
+  });
+}
+
+function prepareEvalPanel(contextKey, targetText) {
+  renderEvalWordChips(`${contextKey}-eval-words`, targetText, null);
+  document.getElementById(`${contextKey}-eval-meter`)?.classList.add("hidden");
+  document.getElementById(`${contextKey}-eval-result`)?.classList.add("hidden");
+  const fill = document.getElementById(`${contextKey}-eval-meter-fill`);
+  if (fill) fill.style.width = "0%";
+}
+
+function renderEvalResult(contextKey, targetText, evRes) {
+  renderEvalWordChips(`${contextKey}-eval-words`, targetText, evRes.wordResults);
+  const resEl = document.getElementById(`${contextKey}-eval-result`);
+  if (!resEl) return;
+
+  const dims = evRes.dimensions || { accuracy: 0, fluency: 0, completeness: 0, clarity: 0 };
+  const asrHtml = evRes.recognizedText
+    ? `<span>识别参考：<em>${escapeHtml(evRes.recognizedText)}</em></span>`
+    : "";
+
+  resEl.innerHTML = `
+    <div class="eval-grade-header">
+      <div class="eval-grade-badge ${evRes.gradeClass}">${escapeHtml(evRes.grade)}</div>
+      <div class="eval-grade-meta">
+        <div class="eval-grade-title">
+          <span>${escapeHtml(evRes.gradeTitle)}</span>
+          <span class="eval-grade-score">${evRes.score} 分 · ${escapeHtml(evRes.stars)}</span>
+        </div>
+        <div class="eval-grade-tip">${escapeHtml(evRes.tip)}</div>
+      </div>
+    </div>
+    <div class="eval-dims">
+      <div class="eval-dim-item">
+        <div class="eval-dim-head"><span>准确度</span><strong>${dims.accuracy}</strong></div>
+        <div class="eval-dim-bar"><span style="width:${dims.accuracy}%"></span></div>
+      </div>
+      <div class="eval-dim-item">
+        <div class="eval-dim-head"><span>流利度</span><strong>${dims.fluency}</strong></div>
+        <div class="eval-dim-bar"><span style="width:${dims.fluency}%"></span></div>
+      </div>
+      <div class="eval-dim-item">
+        <div class="eval-dim-head"><span>完整度</span><strong>${dims.completeness}</strong></div>
+        <div class="eval-dim-bar"><span style="width:${dims.completeness}%"></span></div>
+      </div>
+      <div class="eval-dim-item">
+        <div class="eval-dim-head"><span>清晰度</span><strong>${dims.clarity}</strong></div>
+        <div class="eval-dim-bar"><span style="width:${dims.clarity}%"></span></div>
+      </div>
+    </div>
+    <div class="eval-sub-meta">
+      <span>校准模式：${escapeHtml(evRes.modeLabel)}</span>
+      ${asrHtml}
+    </div>
+  `;
+  resEl.classList.remove("hidden");
+}
+
+function getShadowTriggerMeta(contextKey, triggerBtn) {
+  if (triggerBtn) return triggerBtn;
+  if (contextKey === "fc") return document.getElementById("fc-record-btn");
+  if (contextKey === "dlg") return document.getElementById("dlg-record-btn");
+  return document.getElementById("wb-record-btn");
+}
+
+function resetShadowButtons(contextKey) {
+  const fcRec = document.getElementById("fc-record-btn");
+  const fcEx = document.getElementById("fc-ex-record-btn");
+  const dlgRec = document.getElementById("dlg-record-btn");
+  const dlgStop = document.getElementById("dlg-eval-stop-rec-btn");
+  const wbRec = document.getElementById("wb-record-btn");
+
+  [fcRec, fcEx, dlgRec, wbRec].forEach((b) => b?.classList.remove("recording-active"));
+  if (fcRec) fcRec.textContent = "🎙️ 跟读评分";
+  if (fcEx) fcEx.textContent = "跟读例句";
+  if (dlgRec) dlgRec.textContent = "整段跟读评分";
+  if (dlgStop) dlgStop.classList.add("hidden");
+  if (wbRec) wbRec.textContent = "🎙️ 开始跟读评分";
+  if (contextKey) {
+    document.getElementById(`${contextKey}-eval-meter`)?.classList.add("hidden");
+  }
+}
+
+async function toggleShadowEvaluation(contextKey, explicitText = null, clickedBtn = null) {
+  if (!window.LingoPronunciation) {
+    showToast("发音校准模块未加载");
+    return;
+  }
+
+  // Finish active session if clicked while recording
+  if (state.shadowSession) {
+    const activeCtx = state.recordingTarget || contextKey;
+    const activeTargetText = state.activeShadowText || "";
+    const session = state.shadowSession;
+    state.shadowSession = null;
+
+    const meterLabel = document.getElementById(`${activeCtx}-eval-meter-label`);
+    if (meterLabel) meterLabel.textContent = "正在比对标准发音与音素校准，请稍候...";
+
+    const result = await session.stopAndEvaluate();
+    resetShadowButtons(activeCtx);
+
+    if (result?.blob) {
+      if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
+      state.recordedUrl = URL.createObjectURL(result.blob);
+      document.getElementById(`${activeCtx}-playback-btn`)?.classList.remove("hidden");
+    }
+
+    if (result?.evaluation) {
+      const ev = result.evaluation;
+      renderEvalResult(activeCtx, activeTargetText, ev);
+      showToast(`发音定级：${ev.grade} 级（${ev.score} 分）`);
+      try {
+        await api().submit_quiz_result("shadowing", ["S", "A", "B"].includes(ev.grade) ? 1 : 0, 1, null);
+      } catch {}
+    }
+    return;
+  }
+
+  let targetText = explicitText;
+  if (!targetText) {
+    if (contextKey === "fc") {
+      targetText = state.fcShadowTarget || state.flashcards[state.fcIndex]?.word || "";
+    } else if (contextKey === "dlg") {
+      targetText = state.dlgShadowTarget || state.dialogues[state.activeDialogueIndex]?.lines?.[0]?.en || "";
+    } else {
+      targetText = state.wbShadowWord?.word || "";
+    }
+  }
+  targetText = String(targetText || "").trim();
+  if (!targetText) {
+    showToast("暂无可跟读的英文内容");
+    return;
+  }
+
+  if (contextKey === "dlg") {
+    document.getElementById("dlg-eval-panel")?.classList.remove("hidden");
+  }
+  prepareEvalPanel(contextKey, targetText);
+
+  const meter = document.getElementById(`${contextKey}-eval-meter`);
+  const meterLabel = document.getElementById(`${contextKey}-eval-meter-label`);
+  const meterFill = document.getElementById(`${contextKey}-eval-meter-fill`);
+  const asrPrev = document.getElementById(`${contextKey}-eval-asr-preview`);
+
+  meter?.classList.remove("hidden");
+  if (meterLabel) meterLabel.textContent = "请清晰朗读高亮文本，读完再次点击按钮定级...";
+  if (asrPrev) asrPrev.textContent = "";
+
+  const btn = getShadowTriggerMeta(contextKey, clickedBtn);
+  try {
+    stopAllSpeech();
+    const rate = parseFloat(state.settings.tts_rate || "1.0");
+    const accent = normalizeAccent(state.settings.tts_accent);
+
+    state.recordingTarget = contextKey;
+    state.activeShadowText = targetText;
+    state.shadowSession = await window.LingoPronunciation.startShadowSession({
+      targetText,
+      accent,
+      rate,
+      apiProvider: api(),
+      onLevel: (lv) => {
+        if (meterFill) meterFill.style.width = `${Math.max(4, Math.round(lv * 100))}%`;
+      },
+      onAsrInterim: (txt) => {
+        if (asrPrev) asrPrev.textContent = `实时识别：${txt}`;
+      },
+    });
+
+    if (btn) {
+      btn.classList.add("recording-active");
+      btn.textContent = "录音中... 点击完成评分";
+    }
+    if (contextKey === "dlg") {
+      document.getElementById("dlg-eval-stop-rec-btn")?.classList.remove("hidden");
+    }
+  } catch (err) {
+    state.shadowSession = null;
+    resetShadowButtons(contextKey);
+    showToast(err?.message || "无法访问麦克风，请检查系统录音权限");
   }
 }
 
 function playShadowRecording() {
   if (!state.recordedUrl) {
-    showToast("请先录制跟读音频");
+    showToast("请先完成一次跟读录音");
     return;
   }
   stopAllSpeech();
   shadowPlaybackAudio.src = state.recordedUrl;
   shadowPlaybackAudio.play().catch(() => showToast("回放失败"));
+}
+
+function openShadowModal(wordId) {
+  const w = wordbookCache.find((item) => item.id === wordId);
+  if (!w) return;
+  state.wbShadowWord = w;
+  document.getElementById("modal-shadow-word").textContent = w.word;
+  document.getElementById("modal-shadow-phonetic").textContent = `${w.phonetic || ""}  ${w.meaning_zh || ""}`.trim();
+  document.getElementById("wb-playback-btn")?.classList.add("hidden");
+  refreshCalibrationStatusBadges();
+  prepareEvalPanel("wb", w.word);
+  openModal("shadow-modal");
+}
+
+function closeShadowModal() {
+  if (state.shadowSession && state.recordingTarget === "wb") {
+    toggleShadowEvaluation("wb");
+  }
+  closeModal("shadow-modal");
 }
 
 async function toggleWordFavorite(id) {
@@ -1361,7 +1623,7 @@ function bindEvents() {
     state.settings = await api().update_settings({ tts_accent: e.target.value });
   });
 
-  document.getElementById("play-voice-sample-btn").addEventListener("click", () => {
+  document.getElementById("play-voice-sample-btn")?.addEventListener("click", () => {
     if (!window.USER_VOICE_SAMPLE_B64) {
       showToast("未找到嵌入式原声样本");
       return;
@@ -1510,11 +1772,45 @@ function bindEvents() {
     if (wasPlaying) runListenLoop(state.listenIndex);
   });
 
-  // Shadowing recorder
-  document.getElementById("fc-record-btn").addEventListener("click", () => toggleShadowRecord("fc"));
+  // Duolingo-style Shadowing Calibration & Grading
+  document.getElementById("fc-calibrate-btn")?.addEventListener("click", () => runMicCalibration("fc"));
+  document.getElementById("fc-record-btn").addEventListener("click", (e) => {
+    const word = state.flashcards[state.fcIndex]?.word || "";
+    state.fcShadowTarget = word;
+    toggleShadowEvaluation("fc", word, e.currentTarget);
+  });
+  document.getElementById("fc-ex-record-btn")?.addEventListener("click", (e) => {
+    const ex = state.flashcards[state.fcIndex]?.example_en || "";
+    if (!ex) return;
+    state.fcShadowTarget = ex;
+    toggleShadowEvaluation("fc", ex, e.currentTarget);
+  });
   document.getElementById("fc-playback-btn").addEventListener("click", playShadowRecording);
-  document.getElementById("dlg-record-btn").addEventListener("click", () => toggleShadowRecord("dlg"));
+
+  document.getElementById("dlg-calibrate-btn")?.addEventListener("click", () => runMicCalibration("dlg"));
+  document.getElementById("dlg-record-btn").addEventListener("click", (e) => {
+    const dlg = state.dialogues[state.activeDialogueIndex];
+    const fullText = dlg ? dlg.lines.map((l) => l.en).join(" ") : "";
+    state.dlgShadowTarget = fullText;
+    toggleShadowEvaluation("dlg", fullText, e.currentTarget);
+  });
+  document.getElementById("dlg-eval-speak-btn")?.addEventListener("click", () => {
+    if (state.dlgShadowTarget) speakText(state.dlgShadowTarget);
+  });
+  document.getElementById("dlg-eval-stop-rec-btn")?.addEventListener("click", () => {
+    toggleShadowEvaluation("dlg");
+  });
   document.getElementById("dlg-playback-btn").addEventListener("click", playShadowRecording);
+
+  document.getElementById("wb-calibrate-btn")?.addEventListener("click", () => runMicCalibration("wb"));
+  document.getElementById("wb-shadow-listen-btn")?.addEventListener("click", () => {
+    if (state.wbShadowWord?.word) speakText(state.wbShadowWord.word);
+  });
+  document.getElementById("wb-record-btn")?.addEventListener("click", (e) => {
+    if (!state.wbShadowWord?.word) return;
+    toggleShadowEvaluation("wb", state.wbShadowWord.word, e.currentTarget);
+  });
+  document.getElementById("wb-playback-btn")?.addEventListener("click", playShadowRecording);
 
   // Wordbook
   document.getElementById("wb-search").addEventListener("input", () => loadWordbook(true));

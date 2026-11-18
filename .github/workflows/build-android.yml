@@ -38,17 +38,40 @@ jobs:
           fi
           npx cap sync android
 
-      - name: Configure AndroidManifest permissions and cleartext support
+      - name: Configure AndroidManifest permissions, icon, and Gradle options
         run: |
           python3 - <<'EOF'
           from pathlib import Path
+          import shutil
+
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text(encoding="utf-8")
           if 'android:usesCleartextTraffic="true"' not in text:
               text = text.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
-          if "android.permission.INTERNET" not in text:
-              text = text.replace("</manifest>", '    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>', 1)
+          for perm in (
+              "android.permission.INTERNET",
+              "android.permission.RECORD_AUDIO",
+              "android.permission.MODIFY_AUDIO_SETTINGS",
+          ):
+              if perm not in text:
+                  text = text.replace("</manifest>", f'    <uses-permission android:name="{perm}" />\n</manifest>', 1)
           manifest.write_text(text, encoding="utf-8")
+
+          gradle_file = Path("android/app/build.gradle")
+          if gradle_file.is_file():
+              g = gradle_file.read_text(encoding="utf-8")
+              if "noCompress" not in g and "android {" in g:
+                  g = g.replace("android {\n", "android {\n    aaptOptions {\n        noCompress 'pak', 'mp3'\n    }\n", 1)
+                  gradle_file.write_text(g, encoding="utf-8")
+
+          logo = Path("frontend/assets/lingoflow.png")
+          if logo.is_file():
+              res_root = Path("android/app/src/main/res")
+              for mip in res_root.glob("mipmap-*"):
+                  for name in ("ic_launcher.png", "ic_launcher_round.png", "ic_launcher_foreground.png"):
+                      dst = mip / name
+                      if dst.is_file():
+                          shutil.copy2(logo, dst)
           EOF
 
       - name: Build Debug APK

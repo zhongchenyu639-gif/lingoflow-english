@@ -180,6 +180,27 @@ class TestLingoFlowBackend(unittest.TestCase):
         self.assertTrue(res["cached"])
         self.assertEqual(base64.b64decode(res["audio_b64"]), b"RIFFcached_audio_payload_1234567890_1234567890_123456")
 
+    def test_voice_pack_lookup_us_and_gb(self) -> None:
+        import base64
+        import sqlite3
+        from backend.tts import get_pack_audio
+
+        pack_dir = Path(self.tmp_dir.name) / "voice_packs"
+        pack_dir.mkdir()
+        for code, payload in (("us", b"ID3-us-audio"), ("gb", b"ID3-gb-audio")):
+            conn = sqlite3.connect(pack_dir / f"voice_{code}.db")
+            conn.execute("CREATE TABLE audio (key TEXT PRIMARY KEY, mp3 BLOB NOT NULL)")
+            conn.execute("INSERT INTO audio VALUES (?, ?)", ("serendipity", payload))
+            conn.commit()
+            conn.close()
+
+        us = get_pack_audio("  Serendipity ", "us-neural", pack_dir)
+        gb = get_pack_audio("serendipity", "gb-neural", pack_dir)
+        self.assertEqual(base64.b64decode(us["audio_b64"]), b"ID3-us-audio")
+        self.assertEqual(base64.b64decode(gb["audio_b64"]), b"ID3-gb-audio")
+        self.assertFalse(get_pack_audio("unknownword", "us-neural", pack_dir)["ok"])
+        self.assertFalse(get_pack_audio("serendipity", "us-neural", pack_dir / "missing")["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.database import Database
-from backend.tts import clone_voice_cloud, speak_windows_sapi, stop_windows_sapi
+from backend.tts import clone_voice_cloud, get_pack_audio, speak_windows_sapi, stop_windows_sapi
 
 
 def _default_prompt_wav_path() -> Path:
@@ -104,6 +104,9 @@ class LingoFlowApi:
 
     def stop_speaking(self) -> dict[str, bool]:
         return stop_windows_sapi()
+
+    def get_offline_audio(self, text: str, accent: str = "us-neural") -> dict[str, Any]:
+        return get_pack_audio(text=text, accent=accent)
 
     def synthesize_cloned_speech(
         self, text: str, custom_sample_b64: str = "", ref_text: str = "你好。"

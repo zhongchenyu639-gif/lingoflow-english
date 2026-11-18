@@ -21,9 +21,10 @@ VIRTUAL_MISTAKES = "📕 易错词本"
 DEFAULT_SETTINGS = {
     "daily_goal": "15",
     "tts_rate": "1.0",
-    "tts_accent": "cloned-voice",
+    "tts_accent": "us-neural",
     "theme": "light",
     "auto_play": "0",
+    "mic_calibration": "",
 }
 
 

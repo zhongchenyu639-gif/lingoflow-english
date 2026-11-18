@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="LingoFlow" />
   <title>LingoFlow · 英语精学工作台</title>
+  <link rel="icon" type="image/png" href="assets/lingoflow.png" />
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -15,7 +16,7 @@
     <!-- Left Sidebar -->
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-logo">LF</div>
+        <div class="brand-logo"><img src="assets/lingoflow.png" alt="LingoFlow" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;" /></div>
         <div>
           <div class="brand-name">LingoFlow</div>
           <div class="brand-sub" id="brand-level-badge">Lv.1 初学萌新 · 0 XP</div>
@@ -65,12 +66,10 @@
         <div class="tts-control">
           <label for="tts-accent">发音引擎</label>
           <select id="tts-accent">
-            <option value="cloned-voice">我的克隆音色 (离线+云端)</option>
-            <option value="en-US">美式英语 (US)</option>
-            <option value="en-GB">英式英语 (UK)</option>
+            <option value="us-neural">🇺🇸 播音级美式英语</option>
+            <option value="gb-neural">🇬🇧 播音级英式英语</option>
           </select>
         </div>
-        <button id="play-voice-sample-btn" class="btn btn-ghost btn-sm-ctrl" type="button">试听原声样本</button>
         <div class="tts-control">
           <label for="tts-rate">语速 <span id="tts-rate-val">1.0x</span></label>
           <input id="tts-rate" type="range" min="0.7" max="1.3" step="0.1" value="1.0" />
@@ -224,8 +223,8 @@
                   <button class="btn-icon" id="fc-speak-btn" title="朗读单词 (R)">朗读</button>
                 </div>
                 <div class="shadowing-bar">
-                  <button class="btn btn-ghost btn-xs" id="fc-record-btn" type="button">跟读录音</button>
-                  <button class="btn btn-ghost btn-xs hidden" id="fc-playback-btn" type="button">回放我的读音</button>
+                  <button class="btn btn-ghost btn-xs" id="fc-record-btn" type="button">🎙️ 跟读评分</button>
+                  <button class="btn btn-ghost btn-xs hidden" id="fc-playback-btn" type="button">▶ 回放我的读音</button>
                 </div>
                 <div class="fc-hint">点击卡片空白处或按 Space 查看释义</div>
               </div>
@@ -252,6 +251,27 @@
                   <button class="btn btn-sm" id="fc-notes-save" type="button">保存</button>
                 </div>
               </div>
+            </div>
+
+            <!-- Duolingo-style Pronunciation Calibration & Grade Panel (Flashcards) -->
+            <div class="eval-panel panel" id="fc-eval-panel">
+              <div class="eval-top">
+                <div class="eval-title-row">
+                  <span class="eval-badge-tag">🎯 多邻国式发音校准</span>
+                  <span class="eval-cal-status" id="fc-cal-status">底噪待校准</span>
+                </div>
+                <div class="eval-actions">
+                  <button class="btn btn-ghost btn-xs" id="fc-calibrate-btn" type="button">🎙️ 校准麦克风</button>
+                  <button class="btn btn-ghost btn-xs hidden" id="fc-ex-record-btn" type="button">跟读例句</button>
+                </div>
+              </div>
+              <div class="eval-words" id="fc-eval-words"></div>
+              <div class="eval-meter hidden" id="fc-eval-meter">
+                <div class="eval-meter-label" id="fc-eval-meter-label">正在聆听，请清晰朗读...</div>
+                <div class="eval-meter-track"><div class="eval-meter-fill" id="fc-eval-meter-fill"></div></div>
+                <div class="eval-asr-preview" id="fc-eval-asr-preview"></div>
+              </div>
+              <div class="eval-result hidden" id="fc-eval-result"></div>
             </div>
 
             <div class="fc-controls">
@@ -420,11 +440,31 @@
                 <h2 id="dlg-title" style="margin-top: 8px;"></h2>
               </div>
               <div class="dlg-controls">
-                <button class="btn btn-ghost btn-sm-ctrl" id="dlg-record-btn" type="button">整段跟读录音</button>
-                <button class="btn btn-ghost btn-sm-ctrl hidden" id="dlg-playback-btn" type="button">回放我的录音</button>
+                <button class="btn btn-ghost btn-sm-ctrl" id="dlg-calibrate-btn" type="button">🎙️ 校准麦克风</button>
+                <button class="btn btn-ghost btn-sm-ctrl" id="dlg-record-btn" type="button">整段跟读评分</button>
+                <button class="btn btn-ghost btn-sm-ctrl hidden" id="dlg-playback-btn" type="button">▶ 回放录音</button>
                 <button class="btn btn-primary" id="dlg-play-all-btn">连续播放</button>
                 <button class="btn btn-ghost hidden" id="dlg-stop-btn">停止</button>
               </div>
+            </div>
+            <div class="eval-panel eval-panel-compact hidden" id="dlg-eval-panel">
+              <div class="eval-top">
+                <div class="eval-title-row">
+                  <span class="eval-badge-tag">🎯 口语跟读校准评测</span>
+                  <span class="eval-cal-status" id="dlg-cal-status">底噪待校准</span>
+                </div>
+                <div class="eval-actions">
+                  <button class="btn btn-ghost btn-xs" id="dlg-eval-speak-btn" type="button">🔊 听示范</button>
+                  <button class="btn btn-ghost btn-xs hidden" id="dlg-eval-stop-rec-btn" type="button">停止并评分</button>
+                </div>
+              </div>
+              <div class="eval-words" id="dlg-eval-words"></div>
+              <div class="eval-meter hidden" id="dlg-eval-meter">
+                <div class="eval-meter-label" id="dlg-eval-meter-label">正在聆听，请清晰跟读...</div>
+                <div class="eval-meter-track"><div class="eval-meter-fill" id="dlg-eval-meter-fill"></div></div>
+                <div class="eval-asr-preview" id="dlg-eval-asr-preview"></div>
+              </div>
+              <div class="eval-result hidden" id="dlg-eval-result"></div>
             </div>
             <div id="dlg-lines" class="dlg-lines"></div>
             <div class="key-phrases-box">
@@ -618,10 +658,48 @@
     </div>
   </div>
 
+  <!-- Modal: Wordbook Shadowing Calibration -->
+  <div id="shadow-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="modal-shadow-word">发音跟读校准</h3>
+          <div id="modal-shadow-phonetic" class="word-cell-sub"></div>
+        </div>
+        <button class="btn-icon" onclick="closeShadowModal()">✕</button>
+      </div>
+      <div class="eval-panel" id="wb-eval-panel" style="margin:0;">
+        <div class="eval-top">
+          <div class="eval-title-row">
+            <span class="eval-badge-tag">🎯 发音校准</span>
+            <span class="eval-cal-status" id="wb-cal-status">底噪待校准</span>
+          </div>
+          <div class="eval-actions">
+            <button class="btn btn-ghost btn-xs" id="wb-calibrate-btn" type="button">🎙️ 校准麦克风</button>
+          </div>
+        </div>
+        <div class="eval-words" id="wb-eval-words"></div>
+        <div class="eval-meter hidden" id="wb-eval-meter">
+          <div class="eval-meter-label" id="wb-eval-meter-label">正在聆听，请清晰朗读...</div>
+          <div class="eval-meter-track"><div class="eval-meter-fill" id="wb-eval-meter-fill"></div></div>
+          <div class="eval-asr-preview" id="wb-eval-asr-preview"></div>
+        </div>
+        <div class="eval-result hidden" id="wb-eval-result"></div>
+      </div>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button type="button" class="btn btn-ghost" id="wb-shadow-listen-btn">🔊 听标准发音</button>
+        <button type="button" class="btn btn-ghost hidden" id="wb-playback-btn">▶ 回放我的</button>
+        <button type="button" class="btn btn-primary" id="wb-record-btn">🎙️ 开始跟读评分</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast hidden"></div>
   <script src="seed_bundle.js"></script>
   <script src="voice_sample_bundle.js"></script>
   <script src="offline_voice_manifest.js"></script>
+  <script src="offline_voice_manifest_gb.js"></script>
+  <script src="pronunciation.js"></script>
   <script src="storage.js"></script>
   <script src="app.js"></script>
 </body>

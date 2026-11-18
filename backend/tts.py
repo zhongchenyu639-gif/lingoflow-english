@@ -1,15 +1,13 @@
-"""Offline Windows SAPI TTS fallback and Cloud Zero-Shot Voice Cloning."""
+"""Offline Windows SAPI TTS and local cached voice playback (100% offline)."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import json
+import sqlite3
 import subprocess
+import sys
 import threading
-import urllib.error
-import urllib.request
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +16,31 @@ _PROC_LOCK = threading.Lock()
 _ACTIVE_PROC: subprocess.Popen[bytes] | None = None
 _SPEAK_SEQ = 0
 
-_F5_BASE_URL = "https://mrfakename-e2-f5-tts.hf.space"
-_UPLOAD_CACHE_LOCK = threading.Lock()
-_UPLOADED_PROMPT_CACHE: dict[str, str] = {}
+
+def get_voice_pack_dir() -> Path:
+    """Directory holding voice_us.db / voice_gb.db (kept next to the exe, not inside it)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "voice_packs"
+    return Path(__file__).resolve().parent.parent / "voice_packs"
+
+
+def get_pack_audio(text: str, accent: str = "us-neural", pack_dir: Path | None = None) -> dict[str, Any]:
+    """Look up pre-generated broadcast MP3 for a word/sentence in the offline voice pack."""
+    key = (text or "").strip().lower()
+    if not key:
+        return {"ok": False, "error": "Empty text"}
+    code = "gb" if accent in ("gb-neural", "en-GB") else "us"
+    pack_file = (pack_dir or get_voice_pack_dir()) / f"voice_{code}.db"
+    if not pack_file.is_file():
+        return {"ok": False, "error": f"Missing voice pack: {pack_file.name}"}
+    conn = sqlite3.connect(f"file:{pack_file.as_posix()}?mode=ro", uri=True)
+    try:
+        row = conn.execute("SELECT mp3 FROM audio WHERE key = ?", (key,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return {"ok": False, "error": "Not in voice pack"}
+    return {"ok": True, "audio_b64": base64.b64encode(row[0]).decode("ascii"), "mime": "audio/mpeg"}
 
 
 def stop_windows_sapi() -> dict[str, bool]:
@@ -43,20 +63,20 @@ def stop_windows_sapi() -> dict[str, bool]:
 
 
 def speak_windows_sapi(text: str, rate: float = 1.0) -> dict[str, Any]:
-    """Speak English text using built-in Windows System.Speech synthesizer."""
+    """Speak English text clearly at full volume using Windows System.Speech."""
     global _ACTIVE_PROC
     clean_text = (text or "").strip()
     if not clean_text:
         return {"ok": False, "stopped": False}
 
-    # Stop any prior speech so clicks or dialogue playback never pile up
     stop_windows_sapi()
 
     sapi_rate = max(-6, min(6, round((rate - 1.0) * 6)))
-    escaped = clean_text.replace("'", "''")
+    escaped = clean_text.replace("\r", " ").replace("\n", " ").replace("'", "''")
     ps_script = (
         "Add-Type -AssemblyName System.Speech; "
         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+        "$s.Volume = 100; "
         f"$s.Rate = {sapi_rate}; "
         "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Female, "
         "[System.Speech.Synthesis.VoiceAge]::Adult, 0, [System.Globalization.CultureInfo]'en-US') } catch {}; "
@@ -83,92 +103,13 @@ def speak_windows_sapi(text: str, rate: float = 1.0) -> dict[str, Any]:
     return {"ok": True, "stopped": my_seq != _SPEAK_SEQ}
 
 
-def _upload_prompt_to_f5(prompt_wav_bytes: bytes, prompt_hash: str) -> str:
-    with _UPLOAD_CACHE_LOCK:
-        cached = _UPLOADED_PROMPT_CACHE.get(prompt_hash)
-    if cached:
-        return cached
-
-    boundary = f"----LingoFlow{uuid.uuid4().hex}"
-    body = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="files"; filename="prompt.wav"\r\n'
-        "Content-Type: audio/wav\r\n\r\n"
-    ).encode("utf-8") + prompt_wav_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
-
-    req = urllib.request.Request(
-        f"{_F5_BASE_URL}/gradio_api/upload",
-        data=body,
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        uploaded = json.loads(resp.read().decode("utf-8"))
-    if not isinstance(uploaded, list) or not uploaded:
-        raise RuntimeError(f"Unexpected upload response: {uploaded}")
-    remote_path = str(uploaded[0])
-    with _UPLOAD_CACHE_LOCK:
-        _UPLOADED_PROMPT_CACHE[prompt_hash] = remote_path
-    return remote_path
-
-
-def _call_f5_predict(remote_path: str, ref_text: str, text: str) -> bytes:
-    payload = json.dumps(
-        {
-            "data": [
-                {"path": remote_path, "meta": {"_type": "gradio.FileData"}},
-                ref_text,
-                text,
-                False,
-            ]
-        }
-    ).encode("utf-8")
-    call_req = urllib.request.Request(
-        f"{_F5_BASE_URL}/gradio_api/call/predict",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(call_req, timeout=25) as resp:
-        call_data = json.loads(resp.read().decode("utf-8"))
-    event_id = call_data.get("event_id")
-    if not event_id:
-        raise RuntimeError(f"Missing event_id: {call_data}")
-
-    sse_req = urllib.request.Request(f"{_F5_BASE_URL}/gradio_api/call/predict/{event_id}")
-    with urllib.request.urlopen(sse_req, timeout=75) as resp:
-        sse_text = resp.read().decode("utf-8", errors="replace")
-
-    current_event = ""
-    audio_url = ""
-    for raw_line in sse_text.splitlines():
-        line = raw_line.strip()
-        if line.startswith("event:"):
-            current_event = line[6:].strip()
-        elif line.startswith("data:") and current_event == "complete":
-            parsed = json.loads(line[5:].strip())
-            if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
-                audio_url = parsed[0].get("url") or ""
-                if not audio_url and parsed[0].get("path"):
-                    audio_url = f"{_F5_BASE_URL}/gradio_api/file={parsed[0]['path']}"
-            break
-        elif line.startswith("data:") and current_event == "error":
-            raise RuntimeError(f"Cloud TTS error: {line}")
-
-    if not audio_url:
-        raise RuntimeError(f"Cloud TTS returned no audio URL: {sse_text[:300]}")
-
-    with urllib.request.urlopen(audio_url, timeout=30) as audio_resp:
-        return audio_resp.read()
-
-
 def clone_voice_cloud(
     text: str,
     prompt_wav_bytes: bytes,
     ref_text: str,
     cache_dir: Path,
 ) -> dict[str, Any]:
-    """Synthesize cloned English speech via E2-F5-TTS Cloud API with local WAV cache."""
+    """Return locally cached WAV audio if present; never makes network requests."""
     clean_text = (text or "").strip()
     if not clean_text:
         return {"ok": False, "error": "Empty text"}
@@ -189,22 +130,4 @@ def clone_voice_cloud(
             "cached": True,
         }
 
-    try:
-        remote_path = _upload_prompt_to_f5(prompt_wav_bytes, prompt_hash)
-        try:
-            wav_bytes = _call_f5_predict(remote_path, ref_text, clean_text)
-        except Exception:
-            # Retry once with fresh upload in case remote /tmp expired
-            with _UPLOAD_CACHE_LOCK:
-                _UPLOADED_PROMPT_CACHE.pop(prompt_hash, None)
-            remote_path = _upload_prompt_to_f5(prompt_wav_bytes, prompt_hash)
-            wav_bytes = _call_f5_predict(remote_path, ref_text, clean_text)
-
-        cache_file.write_bytes(wav_bytes)
-        return {
-            "ok": True,
-            "audio_b64": base64.b64encode(wav_bytes).decode("ascii"),
-            "cached": False,
-        }
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+    return {"ok": False, "error": "Offline mode: cloud TTS disabled"}

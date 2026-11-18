@@ -4,6 +4,8 @@ __pycache__/
 build/
 dist/
 data/
+voice_packs/
+build_log.txt
 node_modules/
 ios/
 android/

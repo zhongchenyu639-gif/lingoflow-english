@@ -842,11 +842,27 @@ async function loadDialogues() {
   if (!state.dialogues.length) {
     state.dialogues = await api().get_dialogues();
   }
+  const sceneSelect = document.getElementById("dlg-scene-filter");
+  if (sceneSelect && sceneSelect.options.length <= 1 && state.dialogues.length) {
+    const scenes = [...new Set(state.dialogues.map((d) => d.scene))];
+    sceneSelect.innerHTML =
+      `<option value="全部">全部场景 (${state.dialogues.length})</option>` +
+      scenes.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  }
+  const activeScene = sceneSelect?.value || "全部";
+  const filtered = state.dialogues
+    .map((d, realIdx) => ({ d, realIdx }))
+    .filter(({ d }) => activeScene === "全部" || d.scene === activeScene);
+
+  if (filtered.length && !filtered.some((x) => x.realIdx === state.activeDialogueIndex)) {
+    state.activeDialogueIndex = filtered[0].realIdx;
+  }
+
   const listEl = document.getElementById("dialogue-list");
-  listEl.innerHTML = state.dialogues
+  listEl.innerHTML = filtered
     .map(
-      (d, idx) => `
-      <button class="list-item ${idx === state.activeDialogueIndex ? "active" : ""}" data-idx="${idx}">
+      ({ d, realIdx }) => `
+      <button class="list-item ${realIdx === state.activeDialogueIndex ? "active" : ""}" data-idx="${realIdx}">
         <div class="list-item-title">${escapeHtml(d.title)}</div>
         <div class="list-item-meta">${escapeHtml(d.scene)} · ${escapeHtml(d.level)}</div>
       </button>`
@@ -1084,11 +1100,27 @@ async function loadGrammar() {
   if (!state.grammarNotes.length) {
     state.grammarNotes = await api().get_grammar_notes();
   }
+  const catSelect = document.getElementById("gram-cat-filter");
+  if (catSelect && catSelect.options.length <= 1 && state.grammarNotes.length) {
+    const cats = [...new Set(state.grammarNotes.map((g) => g.category))];
+    catSelect.innerHTML =
+      `<option value="全部">全部专题 (${state.grammarNotes.length})</option>` +
+      cats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  }
+  const activeCat = catSelect?.value || "全部";
+  const filtered = state.grammarNotes
+    .map((g, realIdx) => ({ g, realIdx }))
+    .filter(({ g }) => activeCat === "全部" || g.category === activeCat);
+
+  if (filtered.length && !filtered.some((x) => x.realIdx === state.activeGrammarIndex)) {
+    state.activeGrammarIndex = filtered[0].realIdx;
+  }
+
   const listEl = document.getElementById("grammar-list");
-  listEl.innerHTML = state.grammarNotes
+  listEl.innerHTML = filtered
     .map(
-      (g, idx) => `
-      <button class="list-item ${idx === state.activeGrammarIndex ? "active" : ""}" data-idx="${idx}">
+      ({ g, realIdx }) => `
+      <button class="list-item ${realIdx === state.activeGrammarIndex ? "active" : ""}" data-idx="${realIdx}">
         <div class="list-item-title">${escapeHtml(g.title)}</div>
         <div class="list-item-meta">${escapeHtml(g.category)} · ${escapeHtml(g.level)}</div>
       </button>`
@@ -1880,7 +1912,12 @@ function bindEvents() {
     if (q) speakText(state.quizMode === "cloze" && q.example_en ? q.example_en : q.word, 0.75);
   });
 
-  // Dialogues
+  // Dialogues & Grammar filters
+  document.getElementById("dlg-scene-filter")?.addEventListener("change", () => {
+    stopAllSpeech();
+    loadDialogues();
+  });
+  document.getElementById("gram-cat-filter")?.addEventListener("change", loadGrammar);
   document.getElementById("dlg-show-zh").addEventListener("change", renderDialogueDetail);
   document.getElementById("dlg-play-all-btn").addEventListener("click", handleDialoguePlayPause);
   document.getElementById("dlg-stop-btn").addEventListener("click", stopAllSpeech);

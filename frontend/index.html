@@ -158,8 +158,8 @@
               <button class="quick-card" onclick="navigateTo('dialogues')">
                 <div class="qc-badge">口语</div>
                 <div>
-                  <div class="qc-title">12 组全场景口语对话</div>
-                  <div class="qc-desc">角色扮演静音跟读 + 录音回放</div>
+                  <div class="qc-title">30 组全场景口语对话</div>
+                  <div class="qc-desc">角色扮演静音跟读 + 发音校准评级</div>
                 </div>
               </button>
             </div>
@@ -443,9 +443,12 @@
         <header class="view-header">
           <div>
             <h1>情景口语实战</h1>
-            <p class="subtitle">12 组真实生活与职场场景 · 逐句跟读录音 · 角色扮演对话</p>
+            <p class="subtitle">30 组真实生活、职场与学术场景 · 逐句跟读校准评级 · 角色扮演对话</p>
           </div>
           <div class="header-actions">
+            <select id="dlg-scene-filter" class="select-input">
+              <option value="全部">全部场景 (30)</option>
+            </select>
             <label class="toggle-label">
               <input type="checkbox" id="dlg-roleplay-toggle" />
               角色扮演 (静音 You 跟读)
@@ -507,7 +510,12 @@
         <header class="view-header">
           <div>
             <h1>实用语法手册</h1>
-            <p class="subtitle">12 节核心语法专题 · 双语例句朗读 · 即学即练自测</p>
+            <p class="subtitle">30 节核心语法专题 · 双语例句播音朗读 · 易错辨析即学即练</p>
+          </div>
+          <div class="header-actions">
+            <select id="gram-cat-filter" class="select-input">
+              <option value="全部">全部专题 (30)</option>
+            </select>
           </div>
         </header>
 

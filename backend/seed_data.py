@@ -495,3 +495,8 @@ SEED_GRAMMAR = [
         ],
     },
 ]
+
+from backend.seed_data_extra import EXTRA_DIALOGUES, EXTRA_GRAMMAR  # noqa: E402
+
+SEED_DIALOGUES.extend(EXTRA_DIALOGUES)
+SEED_GRAMMAR.extend(EXTRA_GRAMMAR)

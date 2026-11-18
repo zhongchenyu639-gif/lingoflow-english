@@ -1177,7 +1177,7 @@ async function loadWordbook(resetPage = false) {
           <td><span class="badge badge-outline">${escapeHtml(w.category)}</span></td>
           <td>${status}</td>
           <td style="white-space:nowrap;">
-            <button class="btn-icon sm" onclick="speakText(${JSON.stringify(w.word)})" title="发音">朗读</button>
+            <button class="btn-icon sm" data-wb-speak="${w.id}" title="发音">朗读</button>
             <button class="btn-icon sm" onclick="openShadowModal(${w.id})" title="跟读校准评分">跟读</button>
             <button class="btn-icon sm ${favClass}" onclick="toggleWordFavorite(${w.id})" title="收藏">${w.is_favorite ? "★" : "☆"}</button>
             <button class="btn-icon sm" onclick="openEditWordModal(${w.id})" title="编辑">编辑</button>
@@ -1187,6 +1187,14 @@ async function loadWordbook(resetPage = false) {
         </tr>`;
     })
     .join("");
+
+  tbody.querySelectorAll("[data-wb-speak]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = parseInt(btn.dataset.wbSpeak, 10);
+      const item = wordbookCache.find((w) => w.id === id);
+      if (item?.word) speakText(item.word);
+    });
+  });
 }
 
 // Listen / 随身听

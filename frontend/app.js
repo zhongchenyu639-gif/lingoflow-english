@@ -59,6 +59,10 @@ const shadowPlaybackAudio = new Audio();
 
 const api = () => window.pywebview?.api || window.localLingoApi;
 
+const ICON_MIC = `<svg class="inline-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`;
+const ICON_SPEAKER = `<svg class="inline-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+const ICON_TOP = `<svg class="inline-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14"/><path d="M12 19V9"/><path d="m7 14 5-5 5 5"/></svg>`;
+
 function showToast(msg) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -73,6 +77,71 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function formatPhonetic(ph) {
+  const raw = String(ph || "").trim();
+  if (!raw) return "";
+  return raw
+    .replace(/;?\s*\(\?@\)\s*/g, "; 美 ")
+    .replace(/\\+/g, "ɜ")
+    .replace(/\^/g, "ɡ")
+    .replace(/ә/g, "ə")
+    .replace(/[єε]/g, "e")
+    .replace(/:/g, "ː")
+    .replace(/'/g, "ˈ")
+    .replace(/([.,])(?=[A-Za-zɑɒɔəɚɜɡɪʃʊʌʒθð])/g, "ˌ");
+}
+
+function formatWordMeaningLine(pos, meaningZh) {
+  const m = String(meaningZh || "").trim();
+  const p = String(pos || "").trim();
+  if (!m) return p;
+  if (!p) return m;
+  if (
+    m.toLowerCase().startsWith(p.toLowerCase()) ||
+    /^(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|int|aux|pl|abbr|a|ad)\./i.test(m)
+  ) {
+    return m;
+  }
+  return `${p} ${m}`;
+}
+
+const STUDIED_DLG_KEY = "lingoflow_studied_dlg_v1";
+const STUDIED_GRAM_KEY = "lingoflow_studied_gram_v1";
+
+function getStudiedSet(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || "[]");
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markStudiedItem(key, title) {
+  if (!title) return;
+  const set = getStudiedSet(key);
+  if (!set.has(title)) {
+    set.add(title);
+    try {
+      localStorage.setItem(key, JSON.stringify([...set]));
+    } catch {}
+  }
+}
+
+function markAndReflectStudied(storageKey, title, allItems, tagId, listId) {
+  if (!title) return;
+  markStudiedItem(storageKey, title);
+  const studiedSet = getStudiedSet(storageKey);
+  const tag = document.getElementById(tagId);
+  if (tag && Array.isArray(allItems) && allItems.length) {
+    tag.textContent = `已掌握 ${allItems.filter((x) => studiedSet.has(x.title)).length} / ${allItems.length}`;
+  }
+  const activeTitleEl = document.querySelector(`#${listId} .list-item.active .list-item-title`);
+  if (activeTitleEl && !activeTitleEl.querySelector(".badge-studied")) {
+    activeTitleEl.insertAdjacentHTML("beforeend", `<span class="badge-studied">✓ 已学</span>`);
+  }
 }
 
 function updateAudioControllerUI() {
@@ -229,14 +298,16 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
       resolve(completedNormally && myToken === state.speechToken);
     };
 
-    if (forceLang && forceLang.toLowerCase().startsWith("zh")) {
-      speakWithStandardTTS(clean, rate, forceLang, myToken, finish);
-      return;
-    }
-
-    const voiceMap = isGB ? window.OFFLINE_VOICE_MAP_GB : window.OFFLINE_VOICE_MAP;
+    const isZh = Boolean(forceLang && forceLang.toLowerCase().startsWith("zh"));
+    const voiceMap = isZh ? null : isGB ? window.OFFLINE_VOICE_MAP_GB : window.OFFLINE_VOICE_MAP;
     const offlineRel = voiceMap?.[clean.toLowerCase()];
-    const broadcastLabel = label.startsWith("🔊 对话") ? label : isGB ? "🔊 播音级英式发音..." : "🔊 播音级美式发音...";
+    const broadcastLabel = label.startsWith("🔊 对话")
+      ? label
+      : isZh
+      ? "🔊 播音级中文释义..."
+      : isGB
+      ? "🔊 播音级英式发音..."
+      : "🔊 播音级美式发音...";
 
     const playBroadcast = (src) => {
       state.isUsingClonedAudio = true;
@@ -267,10 +338,11 @@ function speakSingleInternal(text, customRate = null, label = "🔊 正在朗读
       return;
     }
 
-    // Full-vocabulary offline voice pack (voice_packs/voice_us.db / voice_gb.db)
+    // Full-vocabulary offline voice pack (voice_packs/voice_us.db / voice_gb.db / voice_zh.db)
+    const packAccent = isZh ? "zh-CN" : accent;
     if (typeof api().get_offline_audio === "function") {
       api()
-        .get_offline_audio(clean, accent)
+        .get_offline_audio(clean, packAccent)
         .then((res) => {
           if (myToken !== state.speechToken) {
             finish(false);
@@ -427,7 +499,11 @@ function navigateTo(viewName) {
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   const btn = document.getElementById("theme-toggle");
-  btn.textContent = theme === "dark" ? "浅色外观" : "深色外观";
+  if (btn) {
+    const isDark = theme === "dark";
+    btn.textContent = isDark ? "☀️ 暖纸白昼" : "🌙 深色书房";
+    btn.setAttribute("aria-pressed", isDark ? "true" : "false");
+  }
 }
 
 function populateCategorySelects(categories, favoritesCount = 0, mistakesCount = 0) {
@@ -516,7 +592,10 @@ async function loadDashboard() {
       .map(
         (b) => `
         <div class="badge-card ${b.unlocked ? "unlocked" : ""}">
-          <div class="badge-card-title">${b.unlocked ? "已解锁 · " : "未解锁 · "}${escapeHtml(b.name)}</div>
+          <div class="badge-card-top">
+            <span class="badge-card-title">${escapeHtml(b.name)}</span>
+            <span class="badge-state-pill">${b.unlocked ? "已达成" : "待解锁"}</span>
+          </div>
           <div class="badge-card-desc">${escapeHtml(b.desc)}</div>
         </div>`
       )
@@ -535,13 +614,16 @@ async function loadDashboard() {
   const chart = document.getElementById("weekly-chart");
   const maxVal = Math.max(5, ...data.weekly_activity.map((d) => d.count));
   chart.innerHTML = data.weekly_activity
-    .map((d) => {
-      const h = Math.round((d.count / maxVal) * 125);
+    .map((d, idx) => {
+      const h = d.count > 0 ? Math.max(10, Math.round((d.count / maxVal) * 114)) : 4;
+      const isToday = idx === data.weekly_activity.length - 1;
       return `
-        <div class="chart-col">
+        <div class="chart-col ${isToday ? "is-today" : ""}" title="${d.date}：学习 ${d.count} 次">
           <div class="chart-val">${d.count}</div>
-          <div class="chart-bar" style="height:${Math.max(6, h)}px"></div>
-          <div class="chart-date">${d.date}</div>
+          <div class="chart-track">
+            <div class="chart-bar ${d.count === 0 ? "is-zero" : ""}" style="height:${h}px"></div>
+          </div>
+          <div class="chart-date">${isToday ? "今天" : d.date}</div>
         </div>
       `;
     })
@@ -572,11 +654,15 @@ function syllabifyWord(word) {
     .match(/[bcdfghjklmnpqrstvwxz]*[aeiouy]+(?:[bcdfghjklmnpqrstvwxz](?![aeiouy]))*/gi);
   if (!syl || syl.length <= 1) return clean;
   return clean
+    .replace(/([aeiouy])(th|ch|sh|ph|wh|qu)([aeiouy])/gi, "$1·$2$3")
     .replace(/([aeiouy])([bcdfghjklmnpqrstvwxz][aeiouy])/gi, "$1·$2")
-    .replace(/([bcdfghjklmnpqrstvwxz])([bcdfghjklmnpqrstvwxz][aeiouy])/gi, "$1·$2");
+    .replace(/([bcdfghjklmnpqrstvwxz])([bcdfghjklmnpqrstvwxz][aeiouy])/gi, "$1·$2")
+    .replace(/(t|c|s|p|w)·(h)/gi, "$1$2")
+    .replace(/(q)·(u)/gi, "$1$2")
+    .replace(/·+/g, "·");
 }
 
-function renderFlashcard() {
+function renderFlashcard(direction = null) {
   const total = state.flashcards.length;
   const emptyEl = document.getElementById("fc-empty");
   const stageEl = document.getElementById("fc-stage");
@@ -601,8 +687,13 @@ function renderFlashcard() {
   progressEl.textContent = `进度：${state.fcIndex + 1} / ${total} 张待复习`;
   updateFlashcardFavoriteButton(card);
 
+  const cardEl = document.getElementById("flashcard");
   state.fcFlipped = false;
-  document.getElementById("flashcard").classList.remove("flipped");
+  cardEl.classList.remove("flipped", "card-swap-next", "card-swap-prev");
+  if (direction === "next" || direction === "prev") {
+    void cardEl.offsetWidth;
+    cardEl.classList.add(direction === "next" ? "card-swap-next" : "card-swap-prev");
+  }
   document.getElementById("fc-flip-btn").classList.remove("hidden");
   document.getElementById("fc-ratings").classList.add("hidden");
 
@@ -611,13 +702,21 @@ function renderFlashcard() {
   const sylEl = document.getElementById("fc-syllables");
   if (sylEl) {
     const broken = syllabifyWord(card.word);
-    sylEl.textContent = broken !== card.word ? `音节拼读：${broken}` : "";
+    if (broken !== card.word) {
+      const partsHtml = broken
+        .split("·")
+        .map((s) => `<span>${escapeHtml(s)}</span>`)
+        .join(`<span class="syl-dot">·</span>`);
+      sylEl.innerHTML = `<span class="syl-label">音节</span>${partsHtml}`;
+    } else {
+      sylEl.textContent = "";
+    }
   }
   document.getElementById("fc-word-back").textContent = card.word;
-  document.getElementById("fc-phonetic").textContent = card.phonetic || "";
-  document.getElementById("fc-phonetic-back").textContent = card.phonetic || "";
+  document.getElementById("fc-phonetic").textContent = formatPhonetic(card.phonetic);
+  document.getElementById("fc-phonetic-back").textContent = formatPhonetic(card.phonetic);
   document.getElementById("fc-pos").textContent = card.part_of_speech || "vocab";
-  document.getElementById("fc-meaning").textContent = card.meaning_zh;
+  document.getElementById("fc-meaning").textContent = formatWordMeaningLine(card.part_of_speech, card.meaning_zh);
   const hasEx = Boolean(card.example_en && card.example_en.trim());
   const diffStars = "★".repeat(Math.max(1, Math.min(3, card.difficulty || 1))) + "☆".repeat(Math.max(0, 3 - (card.difficulty || 1)));
   document.getElementById("fc-example-en").textContent = hasEx
@@ -662,7 +761,7 @@ async function rateFlashcard(rating) {
     showToast(`下次复习：${res.interval_label}`);
   }
   state.fcIndex += 1;
-  renderFlashcard();
+  renderFlashcard("next");
   const dash = await api().get_dashboard();
   document.getElementById("nav-due-badge").textContent = dash.due_words;
 }
@@ -716,6 +815,10 @@ function renderQuizQuestion() {
   state.quizAnswered = false;
   document.getElementById("quiz-progress").textContent = `第 ${state.quizIndex + 1} / ${state.quizQuestions.length} 题`;
   document.getElementById("quiz-score-live").textContent = `得分: ${state.quizScore}`;
+  const qFill = document.getElementById("quiz-progress-fill");
+  if (qFill && state.quizQuestions.length) {
+    qFill.style.width = `${Math.round(((state.quizIndex + 1) / state.quizQuestions.length) * 100)}%`;
+  }
   document.getElementById("quiz-feedback").classList.add("hidden");
   document.getElementById("quiz-fb-fav-btn")?.classList.add("hidden");
   document.getElementById("quiz-next-btn").classList.add("hidden");
@@ -731,7 +834,7 @@ function renderQuizQuestion() {
 
   if (state.quizMode === "choice") {
     mainEl.textContent = q.word;
-    subEl.textContent = `${q.phonetic || ""} ${q.part_of_speech || ""}`;
+    subEl.textContent = `${formatPhonetic(q.phonetic)} ${q.part_of_speech || ""}`.trim();
     optsEl.classList.remove("hidden");
     spellEl.classList.add("hidden");
     renderQuizOptions(q, "meaning");
@@ -749,8 +852,8 @@ function renderQuizQuestion() {
     renderQuizOptions(q, "meaning");
     speakText(q.word);
   } else {
-    mainEl.textContent = q.meaning_zh;
-    subEl.textContent = `${q.phonetic || ""} ${q.part_of_speech || ""}`;
+    mainEl.textContent = formatWordMeaningLine(q.part_of_speech, q.meaning_zh);
+    subEl.textContent = `${formatPhonetic(q.phonetic)} ${q.part_of_speech || ""}`.trim();
     optsEl.classList.add("hidden");
     spellEl.classList.remove("hidden");
     const input = document.getElementById("quiz-spelling-input");
@@ -877,11 +980,11 @@ function renderQuizReviewList() {
       <div class="review-row">
         <span><strong>${escapeHtml(o.word)}</strong> · ${escapeHtml(o.meaning_zh)}</span>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn-icon sm" data-review-speak="${idx}" title="朗读发音">🔊</button>
+          <button class="btn-icon sm" data-review-speak="${idx}" title="朗读发音">${ICON_SPEAKER}</button>
           <button class="btn-icon sm ${o.is_favorite ? "fav-btn-active" : ""}" data-review-fav="${idx}" title="收藏单词">
-            ${o.is_favorite ? "⭐" : "☆"}
+            ${o.is_favorite ? "★" : "☆"}
           </button>
-          <span>${o.correct ? "✅" : "❌"}</span>
+          <span class="review-mark ${o.correct ? "ok" : "err"}">${o.correct ? "✓" : "✕"}</span>
         </div>
       </div>`
     )
@@ -920,24 +1023,42 @@ async function loadDialogues() {
       scenes.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
   }
   const activeScene = sceneSelect?.value || "全部";
+  const query = (document.getElementById("dlg-search")?.value || "").trim().toLowerCase();
+  const studiedDlg = getStudiedSet(STUDIED_DLG_KEY);
+  const progressTag = document.getElementById("dlg-progress-tag");
+  if (progressTag && state.dialogues.length) {
+    const doneCount = state.dialogues.filter((d) => studiedDlg.has(d.title)).length;
+    progressTag.textContent = `已掌握 ${doneCount} / ${state.dialogues.length}`;
+  }
+
   const filtered = state.dialogues
     .map((d, realIdx) => ({ d, realIdx }))
-    .filter(({ d }) => activeScene === "全部" || d.scene === activeScene);
+    .filter(({ d }) => {
+      if (activeScene !== "全部" && d.scene !== activeScene) return false;
+      if (!query) return true;
+      const inMeta = `${d.title} ${d.scene} ${d.level}`.toLowerCase().includes(query);
+      const inLines = (d.lines || []).some(
+        (l) => `${l.en} ${l.zh}`.toLowerCase().includes(query)
+      );
+      return inMeta || inLines;
+    });
 
   if (filtered.length && !filtered.some((x) => x.realIdx === state.activeDialogueIndex)) {
     state.activeDialogueIndex = filtered[0].realIdx;
   }
 
   const listEl = document.getElementById("dialogue-list");
-  listEl.innerHTML = filtered
-    .map(
-      ({ d, realIdx }) => `
+  listEl.innerHTML = filtered.length
+    ? filtered
+        .map(
+          ({ d, realIdx }) => `
       <button class="list-item ${realIdx === state.activeDialogueIndex ? "active" : ""}" data-idx="${realIdx}">
-        <div class="list-item-title">${escapeHtml(d.title)}</div>
+        <div class="list-item-title">${escapeHtml(d.title)}${studiedDlg.has(d.title) ? `<span class="badge-studied">✓ 已学</span>` : ""}</div>
         <div class="list-item-meta">${escapeHtml(d.scene)} · ${escapeHtml(d.level)}</div>
       </button>`
-    )
-    .join("");
+        )
+        .join("")
+    : `<div class="word-cell-sub" style="padding:16px;">未找到匹配的场景对话</div>`;
   listEl.querySelectorAll(".list-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       stopAllSpeech();
@@ -960,18 +1081,21 @@ function renderDialogueDetail() {
   const linesEl = document.getElementById("dlg-lines");
   linesEl.innerHTML = dlg.lines
     .map(
-      (line, idx) => `
-      <div class="dlg-line" id="dlg-line-${idx}">
+      (line, idx) => {
+        const isYou = String(line.speaker || "").trim().toLowerCase() === "you";
+        return `
+      <div class="dlg-line ${isYou ? "dlg-line-you" : ""}" id="dlg-line-${idx}">
         <div style="flex:1;min-width:0;">
           <div class="dlg-speaker">${escapeHtml(line.speaker)}</div>
           <div class="dlg-en ${hideEn ? "text-masked" : ""}" title="${hideEn ? "点击显示/遮挡英文" : ""}">${escapeHtml(line.en)}</div>
           <div class="dlg-zh ${showZh ? "" : "hidden"}">${escapeHtml(line.zh)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn-icon sm" data-shadow-line="${idx}" title="跟读评分此句">🎙️</button>
-          <button class="btn-icon sm" data-speak-line="${idx}" title="朗读此句">🔊</button>
+          <button class="btn-icon sm" data-shadow-line="${idx}" title="跟读评分此句">${ICON_MIC}</button>
+          <button class="btn-icon sm" data-speak-line="${idx}" title="朗读此句">${ICON_SPEAKER}</button>
         </div>
-      </div>`
+      </div>`;
+      }
     )
     .join("");
 
@@ -1097,6 +1221,8 @@ async function runDialogueLoop(startIndex = 0) {
     state.dialogueLineIndex = 0;
     document.querySelectorAll(".dlg-line").forEach((el) => el.classList.remove("speaking"));
     updateAudioControllerUI();
+    markStudiedItem(STUDIED_DLG_KEY, dlg.title);
+    loadDialogues();
   }
 }
 
@@ -1193,6 +1319,9 @@ function renderGrammarMiniCheck(g, offset = 0) {
       fbEl.className = `quiz-feedback ${picked.correct ? "ok" : "err"}`;
       fbEl.textContent = (picked.correct ? "✅ 正确！" : "❌ 再看看规则：") + check.explanation;
       fbEl.classList.remove("hidden");
+      if (picked.correct) {
+        markAndReflectStudied(STUDIED_GRAM_KEY, g.title, state.grammarNotes, "gram-progress-tag", "grammar-list");
+      }
     });
   });
 }
@@ -1209,24 +1338,38 @@ async function loadGrammar() {
       cats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
   }
   const activeCat = catSelect?.value || "全部";
+  const query = (document.getElementById("gram-search")?.value || "").trim().toLowerCase();
+  const studiedGram = getStudiedSet(STUDIED_GRAM_KEY);
+  const progressTag = document.getElementById("gram-progress-tag");
+  if (progressTag && state.grammarNotes.length) {
+    const doneCount = state.grammarNotes.filter((n) => studiedGram.has(n.title)).length;
+    progressTag.textContent = `已掌握 ${doneCount} / ${state.grammarNotes.length}`;
+  }
+
   const filtered = state.grammarNotes
     .map((g, realIdx) => ({ g, realIdx }))
-    .filter(({ g }) => activeCat === "全部" || g.category === activeCat);
+    .filter(({ g }) => {
+      if (activeCat !== "全部" && g.category !== activeCat) return false;
+      if (!query) return true;
+      return `${g.title} ${g.category} ${g.summary} ${g.explanation}`.toLowerCase().includes(query);
+    });
 
   if (filtered.length && !filtered.some((x) => x.realIdx === state.activeGrammarIndex)) {
     state.activeGrammarIndex = filtered[0].realIdx;
   }
 
   const listEl = document.getElementById("grammar-list");
-  listEl.innerHTML = filtered
-    .map(
-      ({ g, realIdx }) => `
+  listEl.innerHTML = filtered.length
+    ? filtered
+        .map(
+          ({ g, realIdx }) => `
       <button class="list-item ${realIdx === state.activeGrammarIndex ? "active" : ""}" data-idx="${realIdx}">
-        <div class="list-item-title">${escapeHtml(g.title)}</div>
+        <div class="list-item-title">${escapeHtml(g.title)}${studiedGram.has(g.title) ? `<span class="badge-studied">✓ 已学</span>` : ""}</div>
         <div class="list-item-meta">${escapeHtml(g.category)} · ${escapeHtml(g.level)}</div>
       </button>`
-    )
-    .join("");
+        )
+        .join("")
+    : `<div class="word-cell-sub" style="padding:16px;">未找到匹配的语法专题</div>`;
   listEl.querySelectorAll(".list-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.activeGrammarIndex = parseInt(btn.dataset.idx, 10);
@@ -1252,8 +1395,8 @@ async function loadGrammar() {
           <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">${escapeHtml(ex.zh)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn-icon sm" data-gram-shadow="${i}" title="跟读评分例句">🎙️</button>
-          <button class="btn-icon sm" data-gram-ex="${i}" title="朗读例句">🔊</button>
+          <button class="btn-icon sm" data-gram-shadow="${i}" title="跟读评分例句">${ICON_MIC}</button>
+          <button class="btn-icon sm" data-gram-ex="${i}" title="朗读例句">${ICON_SPEAKER}</button>
         </div>
       </div>`
     )
@@ -1306,26 +1449,29 @@ async function loadWordbook(resetPage = false) {
   document.getElementById("wb-next-page").disabled = state.wbPage >= totalPages;
 
   const tbody = document.getElementById("wb-tbody");
-  tbody.innerHTML = words
-    .map((w) => {
-      const status =
-        w.repetitions >= 2 && w.interval_days >= 6
-          ? "已掌握"
-          : w.repetitions > 0
-          ? `复习中 (${w.interval_days}天)`
-          : w.last_reviewed_at
-          ? "学习中"
-          : "未学习";
-      const favClass = w.is_favorite ? "fav-btn-active" : "";
-      const noteLine = w.notes ? `<div class="word-cell-sub">笔记：${escapeHtml(w.notes)}</div>` : "";
-      return `
+  tbody.innerHTML = words.length
+    ? words
+        .map((w) => {
+          const status =
+            w.repetitions >= 2 && w.interval_days >= 6
+              ? "已掌握"
+              : w.repetitions > 0
+              ? `复习中 (${w.interval_days}天)`
+              : w.last_reviewed_at
+              ? "学习中"
+              : "未学习";
+          const favClass = w.is_favorite ? "fav-btn-active" : "";
+          const noteLine = w.notes ? `<div class="word-cell-sub">笔记：${escapeHtml(w.notes)}</div>` : "";
+          const phoneticText = formatPhonetic(w.phonetic);
+          const meaningLine = formatWordMeaningLine(w.part_of_speech, w.meaning_zh);
+          return `
         <tr>
           <td>
             <div class="word-cell-main">${escapeHtml(w.word)}</div>
-            <div class="word-cell-sub">${escapeHtml(w.phonetic)}</div>
+            <div class="word-cell-sub">${escapeHtml(phoneticText)}</div>
           </td>
           <td>
-            <div>${escapeHtml(w.part_of_speech)} ${escapeHtml(w.meaning_zh)}</div>
+            <div>${escapeHtml(meaningLine)}</div>
             <div class="word-cell-sub">${escapeHtml(w.example_en)}</div>
             ${noteLine}
           </td>
@@ -1337,11 +1483,12 @@ async function loadWordbook(resetPage = false) {
             <button class="btn-icon sm ${favClass}" onclick="toggleWordFavorite(${w.id})" title="收藏">${w.is_favorite ? "★" : "☆"}</button>
             <button class="btn-icon sm" onclick="openEditWordModal(${w.id})" title="编辑">编辑</button>
             <button class="btn-icon sm" onclick="resetWord(${w.id})" title="重置进度">重置</button>
-            <button class="btn-icon sm" onclick="deleteWord(${w.id})" title="删除">删除</button>
+            <button class="btn-icon sm btn-danger-hover" onclick="deleteWord(${w.id})" title="删除">删除</button>
           </td>
         </tr>`;
-    })
-    .join("");
+        })
+        .join("")
+    : `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:28px;">暂无匹配词汇，请尝试调整搜索词或切换分类</td></tr>`;
 
   tbody.querySelectorAll("[data-wb-speak]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1355,6 +1502,10 @@ async function loadWordbook(resetPage = false) {
 // Listen / 随身听
 function updateListenControlUI() {
   const playBtn = document.getElementById("listen-play-btn");
+  const stage = document.querySelector(".listen-stage");
+  if (stage) {
+    stage.classList.toggle("is-playing", state.listenPlayState === "playing");
+  }
   if (!playBtn) return;
   if (state.listenPlayState === "playing") playBtn.textContent = "暂停";
   else if (state.listenPlayState === "paused") playBtn.textContent = "继续连播";
@@ -1414,7 +1565,7 @@ async function loadListenView() {
   renderListenStage();
 }
 
-function renderListenQueue() {
+function renderListenQueue(movedIdx = -1) {
   const listEl = document.getElementById("listen-queue-list");
   if (!listEl) return;
   if (!state.listenWords.length) {
@@ -1431,14 +1582,14 @@ function renderListenQueue() {
   listEl.innerHTML = state.listenWords
     .map(
       (w, idx) => `
-      <div class="listen-queue-item ${idx === state.listenIndex ? "active" : ""}">
+      <div class="listen-queue-item ${idx === state.listenIndex ? "active" : ""} ${idx === movedIdx ? "queue-item-moved" : ""}">
         <div class="listen-queue-main" data-q-jump="${idx}">
           <span class="listen-queue-idx">${idx + 1}.</span>
           <span class="listen-queue-word">${escapeHtml(w.word)}</span>
           <span class="listen-queue-zh">${escapeHtml(w.meaning_zh || "")}</span>
         </div>
         <div class="listen-queue-btns">
-          <button type="button" class="btn-icon sm" data-q-top="${idx}" title="置顶" ${idx === 0 ? "disabled" : ""}>⏫</button>
+          <button type="button" class="btn-icon sm" data-q-top="${idx}" title="置顶" ${idx === 0 ? "disabled" : ""}>${ICON_TOP}</button>
           <button type="button" class="btn-icon sm" data-q-up="${idx}" title="上移" ${idx === 0 ? "disabled" : ""}>↑</button>
           <button type="button" class="btn-icon sm" data-q-down="${idx}" title="下移" ${idx === state.listenWords.length - 1 ? "disabled" : ""}>↓</button>
         </div>
@@ -1446,13 +1597,18 @@ function renderListenQueue() {
     )
     .join("");
 
+  const activeQueueItem = listEl.querySelector(".listen-queue-item.active");
+  if (activeQueueItem && state.listenPlayState === "playing") {
+    activeQueueItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   listEl.querySelectorAll("[data-q-jump]").forEach((el) => {
     el.addEventListener("click", () => {
       const targetIdx = parseInt(el.dataset.qJump, 10);
       const wasPlaying = state.listenPlayState === "playing";
       stopAllSpeech();
       state.listenIndex = targetIdx;
-      renderListenStage();
+      renderListenStage(true);
       if (wasPlaying) runListenLoop(targetIdx);
       else speakText(state.listenWords[targetIdx].word);
     });
@@ -1475,7 +1631,7 @@ function renderListenQueue() {
         state.settings = s;
       }).catch(() => {});
     }
-    renderListenStage();
+    renderListenStage(false, toIdx);
   };
 
   listEl.querySelectorAll("[data-q-top]").forEach((btn) => {
@@ -1495,7 +1651,7 @@ function renderListenQueue() {
   });
 }
 
-function renderListenStage() {
+function renderListenStage(animateWord = false, movedQueueIdx = -1) {
   const list = state.listenWords;
   const metaEl = document.getElementById("listen-index-text");
   const wordEl = document.getElementById("listen-word");
@@ -1516,14 +1672,19 @@ function renderListenStage() {
   const blind = Boolean(document.getElementById("listen-blind-toggle")?.checked);
   metaEl.textContent = `随身听 · ${state.listenIndex + 1} / ${list.length} · ${w.category}${blind ? " · 盲听模式（点击模糊区偷看）" : ""}`;
   wordEl.textContent = w.word;
-  phEl.textContent = `${w.phonetic || ""} ${w.part_of_speech || ""}`;
-  meanEl.textContent = w.meaning_zh;
+  if (animateWord) {
+    wordEl.classList.remove("listen-word-enter");
+    void wordEl.offsetWidth;
+    wordEl.classList.add("listen-word-enter");
+  }
+  phEl.textContent = `${formatPhonetic(w.phonetic)} ${w.part_of_speech || ""}`.trim();
+  meanEl.textContent = formatWordMeaningLine(w.part_of_speech, w.meaning_zh);
   exEl.textContent = w.example_en ? `${w.example_en} — ${w.example_zh || ""}` : "";
   [wordEl, phEl, meanEl, exEl].forEach((el) => {
     el.classList.remove("peek");
     el.classList.toggle("text-masked", blind);
   });
-  renderListenQueue();
+  renderListenQueue(movedQueueIdx);
 }
 
 function cleanChineseMeaningForSpeech(meaningZh) {
@@ -1558,7 +1719,7 @@ async function runListenLoop(startIndex = 0) {
         break;
       }
     }
-    renderListenStage();
+    renderListenStage(true);
     const w = state.listenWords[state.listenIndex];
     const repeats = parseInt(document.getElementById("listen-repeat").value || "2", 10);
 
@@ -1747,11 +1908,11 @@ function resetShadowButtons(contextKey) {
   const wbRec = document.getElementById("wb-record-btn");
 
   [fcRec, fcEx, dlgRec, wbRec].forEach((b) => b?.classList.remove("recording-active"));
-  if (fcRec) fcRec.textContent = "🎙️ 跟读评分";
+  if (fcRec) fcRec.textContent = "跟读评分";
   if (fcEx) fcEx.textContent = "跟读例句";
   if (dlgRec) dlgRec.textContent = "整段跟读评分";
   if (dlgStop) dlgStop.classList.add("hidden");
-  if (wbRec) wbRec.textContent = "🎙️ 开始跟读评分";
+  if (wbRec) wbRec.textContent = "开始跟读评分";
   if (contextKey) {
     document.getElementById(`${contextKey}-eval-meter`)?.classList.add("hidden");
   }
@@ -1786,6 +1947,10 @@ async function toggleShadowEvaluation(contextKey, explicitText = null, clickedBt
       const ev = result.evaluation;
       renderEvalResult(activeCtx, activeTargetText, ev);
       showToast(`发音定级：${ev.grade} 级（${ev.score} 分）`);
+      if (activeCtx === "dlg" && ["S", "A", "B"].includes(ev.grade)) {
+        const curDlg = state.dialogues[state.activeDialogueIndex];
+        markAndReflectStudied(STUDIED_DLG_KEY, curDlg?.title, state.dialogues, "dlg-progress-tag", "dialogue-list");
+      }
       try {
         await api().submit_quiz_result("shadowing", ["S", "A", "B"].includes(ev.grade) ? 1 : 0, 1, null);
       } catch {}
@@ -1873,7 +2038,7 @@ function openShadowModal(wordId) {
   if (!w) return;
   state.wbShadowWord = w;
   document.getElementById("modal-shadow-word").textContent = w.word;
-  document.getElementById("modal-shadow-phonetic").textContent = `${w.phonetic || ""}  ${w.meaning_zh || ""}`.trim();
+  document.getElementById("modal-shadow-phonetic").textContent = `${formatPhonetic(w.phonetic)}  ${formatWordMeaningLine(w.part_of_speech, w.meaning_zh)}`.trim();
   document.getElementById("wb-playback-btn")?.classList.add("hidden");
   refreshCalibrationStatusBadges();
   prepareEvalPanel("wb", w.word);
@@ -2019,7 +2184,7 @@ function bindEvents() {
   document.getElementById("fc-prev-btn").addEventListener("click", () => {
     if (state.fcIndex > 0) {
       state.fcIndex -= 1;
-      renderFlashcard();
+      renderFlashcard("prev");
     }
   });
   document.getElementById("fc-fav-btn").addEventListener("click", async () => {
@@ -2037,6 +2202,12 @@ function bindEvents() {
     const res = await api().update_word_notes(card.id, notes);
     card.notes = res.notes;
     showToast("助记笔记已保存");
+  });
+  document.getElementById("fc-notes-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById("fc-notes-save").click();
+    }
   });
   document.getElementById("flashcard").addEventListener("click", (e) => {
     if (e.target.closest("button") || e.target.closest("input")) return;
@@ -2104,10 +2275,15 @@ function bindEvents() {
   });
 
   // Dialogues & Grammar filters
+  document.getElementById("dlg-search")?.addEventListener("input", () => {
+    stopAllSpeech();
+    loadDialogues();
+  });
   document.getElementById("dlg-scene-filter")?.addEventListener("change", () => {
     stopAllSpeech();
     loadDialogues();
   });
+  document.getElementById("gram-search")?.addEventListener("input", loadGrammar);
   document.getElementById("gram-cat-filter")?.addEventListener("change", loadGrammar);
   document.getElementById("gram-next-check-btn")?.addEventListener("click", () => {
     const g = state.grammarNotes[state.activeGrammarIndex];
@@ -2145,7 +2321,7 @@ function bindEvents() {
       state.settings = await api().update_settings({ listen_read_zh: e.target.checked ? "1" : "0" });
     } catch {}
   });
-  document.getElementById("listen-blind-toggle")?.addEventListener("change", renderListenStage);
+  document.getElementById("listen-blind-toggle")?.addEventListener("change", () => renderListenStage(false));
   document.querySelector(".listen-stage")?.addEventListener("click", (e) => {
     if (e.target.closest("button")) return;
     if (!document.getElementById("listen-blind-toggle")?.checked) return;
@@ -2163,7 +2339,7 @@ function bindEvents() {
       state.listenWords = shuffleWords(state.listenWords);
       state.listenIndex = 0;
       if (sortEl?.value === "custom") saveCustomListenOrder(state.listenWords);
-      renderListenStage();
+      renderListenStage(true);
     }
     showToast("播放列表已重新随机打乱");
     if (wasPlaying) runListenLoop(0);
@@ -2181,7 +2357,7 @@ function bindEvents() {
     const wasPlaying = state.listenPlayState === "playing";
     stopAllSpeech();
     state.listenIndex = (state.listenIndex - 1 + state.listenWords.length) % state.listenWords.length;
-    renderListenStage();
+    renderListenStage(true);
     if (wasPlaying) runListenLoop(state.listenIndex);
   });
   document.getElementById("listen-next-btn").addEventListener("click", () => {
@@ -2189,7 +2365,7 @@ function bindEvents() {
     const wasPlaying = state.listenPlayState === "playing";
     stopAllSpeech();
     state.listenIndex = (state.listenIndex + 1) % state.listenWords.length;
-    renderListenStage();
+    renderListenStage(true);
     if (wasPlaying) runListenLoop(state.listenIndex);
   });
 
@@ -2309,10 +2485,22 @@ function bindEvents() {
     loadDashboard();
   });
 
+  document.querySelectorAll(".modal").forEach((modal) => {
+    modal.addEventListener("click", (e) => {
+      if (e.target !== modal) return;
+      if (modal.id === "shadow-modal") closeShadowModal();
+      else closeModal(modal.id);
+    });
+  });
+
   // Global keyboard shortcuts (Escape stops playback everywhere; shortcuts for Flashcards & Quiz)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       stopAllSpeech();
+      document.querySelectorAll(".modal:not(.hidden)").forEach((m) => {
+        if (m.id === "shadow-modal") closeShadowModal();
+        else closeModal(m.id);
+      });
       return;
     }
     if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;

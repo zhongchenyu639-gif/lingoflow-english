@@ -29,7 +29,13 @@ def get_pack_audio(text: str, accent: str = "us-neural", pack_dir: Path | None =
     key = (text or "").strip().lower()
     if not key:
         return {"ok": False, "error": "Empty text"}
-    code = "gb" if accent in ("gb-neural", "en-GB") else "us"
+    low = (accent or "").lower()
+    if low.startswith("zh"):
+        code = "zh"
+    elif low in ("gb-neural", "en-gb"):
+        code = "gb"
+    else:
+        code = "us"
     pack_file = (pack_dir or get_voice_pack_dir()) / f"voice_{code}.db"
     if not pack_file.is_file():
         return {"ok": False, "error": f"Missing voice pack: {pack_file.name}"}

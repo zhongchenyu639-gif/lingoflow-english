@@ -178,6 +178,10 @@ class Database:
                         for g in new_grams
                     ],
                 )
+            conn.executemany(
+                "UPDATE grammar_notes SET common_mistakes_json = ? WHERE title = ?",
+                [(json.dumps(g["common_mistakes"], ensure_ascii=False), g["title"]) for g in SEED_GRAMMAR],
+            )
 
             for key, value in DEFAULT_SETTINGS.items():
                 conn.execute(
@@ -672,14 +676,41 @@ class Database:
         if not pool:
             pool = list(all_words)
 
+        if mode == "cloze":
+            def has_valid_cloze(w: dict[str, Any]) -> bool:
+                ex = (w.get("example_en") or "").strip()
+                word = (w.get("word") or "").strip()
+                return bool(ex and word and word.lower() in ex.lower())
+
+            cloze_pool = [w for w in pool if has_valid_cloze(w)]
+            if not cloze_pool:
+                cloze_pool = [w for w in all_words if has_valid_cloze(w)]
+            if cloze_pool:
+                pool = cloze_pool
+
+        words_by_pos: dict[str, list[dict[str, Any]]] = {}
+        for w in all_words:
+            p = (w.get("part_of_speech") or "").strip().lower()
+            if p:
+                words_by_pos.setdefault(p, []).append(w)
+
         random.shuffle(pool)
         selected = pool[: min(count, len(pool))]
         questions = []
 
         for item in selected:
-            distractors = [w for w in all_words if w["id"] != item["id"]]
-            random.shuffle(distractors)
-            options = [item] + distractors[:3]
+            pos = (item.get("part_of_speech") or "").strip().lower()
+            same_pool = [w for w in words_by_pos.get(pos, []) if w["id"] != item["id"]] if pos else []
+            if len(same_pool) >= 3:
+                distractors = random.sample(same_pool, 3)
+            else:
+                distractors = list(same_pool)
+                chosen_ids = {item["id"], *(d["id"] for d in distractors)}
+                fallback_candidates = [w for w in all_words if w["id"] not in chosen_ids]
+                need = min(3 - len(distractors), len(fallback_candidates))
+                if need > 0:
+                    distractors.extend(random.sample(fallback_candidates, need))
+            options = [item] + distractors
             random.shuffle(options)
 
             example_en = item.get("example_en") or ""

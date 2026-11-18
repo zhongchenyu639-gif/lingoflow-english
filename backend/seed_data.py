@@ -434,7 +434,7 @@ SEED_GRAMMAR = [
             {"en": "I wish I could speak fluent English.", "zh": "真希望我能说一口流利的英语。"},
         ],
         "common_mistakes": [
-            "注意：在正式或标准书面语中，虚拟条件句用 If I were... 而非 If I was...。",
+            "错误：If I was you, I would take that opportunity. → 正确：If I were you, I would take that opportunity.（与现在事实相反的虚拟条件句中，be 动词统一用 were）",
         ],
     },
     {

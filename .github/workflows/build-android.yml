@@ -64,6 +64,16 @@ jobs:
                   g = g.replace("android {\n", "android {\n    aaptOptions {\n        noCompress 'pak', 'mp3'\n    }\n", 1)
                   gradle_file.write_text(g, encoding="utf-8")
 
+          gradle_props = Path("android/gradle.properties")
+          if gradle_props.is_file():
+              import re as _re
+              gp = gradle_props.read_text(encoding="utf-8")
+              if "org.gradle.jvmargs=" in gp:
+                  gp = _re.sub(r"org\.gradle\.jvmargs=.*", "org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8", gp)
+              else:
+                  gp += "\norg.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8\n"
+              gradle_props.write_text(gp, encoding="utf-8")
+
           logo = Path("frontend/assets/lingoflow.png")
           if logo.is_file():
               res_root = Path("android/app/src/main/res")
@@ -160,6 +170,17 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk LingoFlow-Android.apk
           ls -lh LingoFlow-Android.apk
+          python3 - <<'EOF'
+          import zipfile
+          with zipfile.ZipFile("LingoFlow-Android.apk") as zf:
+              names = set(zf.namelist())
+          for req in ("assets/public/styles.css", "assets/public/app.js", "assets/public/seed_bundle.js", "assets/public/storage.js"):
+              assert req in names, f"Missing {req} in APK"
+          for code in ("us", "gb", "zh"):
+              paks = [n for n in names if n.startswith(f"assets/public/voice_pak/{code}/") and n.endswith(".pak")]
+              assert len(paks) == 256, f"Expected 256 .pak files for {code}, got {len(paks)}"
+          print("APK asset verification passed: 256x3 voice_pak + core frontend files present.")
+          EOF
 
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@v4

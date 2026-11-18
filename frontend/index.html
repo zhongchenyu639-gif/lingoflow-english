@@ -66,15 +66,15 @@
         <div class="tts-control">
           <label for="tts-accent">发音引擎</label>
           <select id="tts-accent">
-            <option value="us-neural">🇺🇸 播音级美式英语</option>
-            <option value="gb-neural">🇬🇧 播音级英式英语</option>
+            <option value="us-neural">美式播音 · Ava</option>
+            <option value="gb-neural">英式播音 · Libby</option>
           </select>
         </div>
         <div class="tts-control">
           <label for="tts-rate">语速 <span id="tts-rate-val">1.0x</span></label>
           <input id="tts-rate" type="range" min="0.7" max="1.3" step="0.1" value="1.0" />
         </div>
-        <button id="theme-toggle" class="btn btn-ghost btn-full">深色外观</button>
+        <button id="theme-toggle" class="btn btn-ghost btn-full" type="button" aria-pressed="false">🌙 深色书房</button>
       </div>
     </aside>
 
@@ -85,7 +85,7 @@
         <header class="view-header">
           <div>
             <h1>今日学习计划</h1>
-            <p class="subtitle">全阶段 15,272 词库 · SM-2 间隔重复 · 播音级离线语音 · 多邻国式跟读评级</p>
+            <p class="subtitle">智能间隔复习 · 离线双语精听 · 跟读发音校准</p>
           </div>
           <div class="header-actions">
             <button class="btn btn-ghost hidden" id="dash-mistakes-btn">攻克错题 (0)</button>
@@ -182,7 +182,7 @@
         <header class="view-header">
           <div>
             <h1>记忆卡片</h1>
-            <p class="subtitle">快捷键：Space 翻卡 · R 朗读 · G 跟读定级 · 1-4 记忆评级</p>
+            <p class="subtitle">快捷键：<kbd class="kbd-key">Space</kbd> 翻卡 · <kbd class="kbd-key">R</kbd> 朗读 · <kbd class="kbd-key">G</kbd> 跟读定级 · <kbd class="kbd-key">1–4</kbd> 记忆评级</p>
           </div>
           <div class="header-actions">
             <label class="toggle-label">
@@ -226,10 +226,10 @@
                   <button class="btn-icon" id="fc-speak-btn" title="朗读单词 (R)">朗读</button>
                 </div>
                 <div class="shadowing-bar">
-                  <button class="btn btn-ghost btn-xs" id="fc-record-btn" type="button">🎙️ 跟读评分</button>
+                  <button class="btn btn-ghost btn-xs" id="fc-record-btn" type="button">跟读评分</button>
                   <button class="btn btn-ghost btn-xs hidden" id="fc-playback-btn" type="button">▶ 回放我的读音</button>
                 </div>
-                <div class="fc-hint">点击卡片空白处或按 Space 查看释义</div>
+                <div class="fc-hint">轻点卡片空白处或按 <kbd class="kbd-key">Space</kbd> 查看释义</div>
               </div>
 
               <div class="fc-face fc-back">
@@ -250,7 +250,7 @@
                   <div class="fc-example-zh" id="fc-example-zh"></div>
                 </div>
                 <div class="fc-notes-row">
-                  <input id="fc-notes-input" type="text" placeholder="记录词根词缀或助记笔记..." />
+                  <input id="fc-notes-input" type="text" placeholder="记录词根词缀或助记笔记（回车保存）..." />
                   <button class="btn btn-sm" id="fc-notes-save" type="button">保存</button>
                 </div>
               </div>
@@ -260,11 +260,11 @@
             <div class="eval-panel panel" id="fc-eval-panel">
               <div class="eval-top">
                 <div class="eval-title-row">
-                  <span class="eval-badge-tag">🎯 多邻国式发音校准</span>
+                  <span class="eval-badge-tag">发音跟读校准</span>
                   <span class="eval-cal-status" id="fc-cal-status">底噪待校准</span>
                 </div>
                 <div class="eval-actions">
-                  <button class="btn btn-ghost btn-xs" id="fc-calibrate-btn" type="button">🎙️ 校准麦克风</button>
+                  <button class="btn btn-ghost btn-xs" id="fc-calibrate-btn" type="button">校准麦克风</button>
                   <button class="btn btn-ghost btn-xs hidden" id="fc-ex-record-btn" type="button">跟读例句</button>
                 </div>
               </div>
@@ -307,21 +307,21 @@
         <header class="view-header">
           <div>
             <h1>随身听 · 磨耳朵</h1>
-            <p class="subtitle">选定词书后连续播放，配合大字屏显巩固听觉记忆</p>
+            <p class="subtitle">选定词书连续播放 · 支持排序、盲听自测与双语播报</p>
           </div>
           <div class="header-actions">
             <select id="listen-category" class="select-input">
               <option value="全部">全部分类</option>
             </select>
             <select id="listen-sort" class="select-input">
-              <option value="shuffle">🎲 随机打乱</option>
-              <option value="due">🧠 易错/待复习优先</option>
-              <option value="freq_asc">📚 由易到难</option>
-              <option value="freq_desc">🔥 由难到易</option>
-              <option value="newest">🆕 最新添加</option>
-              <option value="alpha_asc">🔤 字母 A → Z</option>
-              <option value="alpha_desc">🔠 字母 Z → A</option>
-              <option value="custom">✏️ 自定义顺序</option>
+              <option value="shuffle">随机打乱</option>
+              <option value="due">易错 / 待复习优先</option>
+              <option value="freq_asc">由易到难</option>
+              <option value="freq_desc">由难到易</option>
+              <option value="newest">最新添加</option>
+              <option value="alpha_asc">字母 A → Z</option>
+              <option value="alpha_desc">字母 Z → A</option>
+              <option value="custom">自定义顺序</option>
             </select>
             <select id="listen-limit" class="select-input">
               <option value="60" selected>60 词/轮</option>
@@ -332,14 +332,14 @@
               <option value="1">每词读 1 遍</option>
               <option value="2" selected>每词读 2 遍</option>
             </select>
-            <button class="btn btn-ghost btn-sm-ctrl" id="listen-reshuffle-btn" type="button">🔀 打乱重排</button>
+            <button class="btn btn-ghost btn-sm-ctrl" id="listen-reshuffle-btn" type="button">打乱重排</button>
             <label class="toggle-label">
               <input type="checkbox" id="listen-read-zh" checked />
-              读完播报中文
+              播报中文
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="listen-blind-toggle" />
-              盲听自测 (隐藏文本)
+              盲听自测
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="listen-loop" checked />
@@ -349,7 +349,10 @@
         </header>
 
         <div class="panel listen-stage">
-          <div class="listen-meta" id="listen-index-text">等待加载播放列表</div>
+          <div class="listen-meta-row">
+            <div class="listen-meta" id="listen-index-text">等待加载播放列表</div>
+            <div class="listen-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+          </div>
           <div class="listen-word" id="listen-word">Ready</div>
           <div class="listen-phonetic" id="listen-phonetic"></div>
           <div class="listen-meaning" id="listen-meaning">点击下方播放按钮开始磨耳朵</div>
@@ -380,7 +383,7 @@
         <header class="view-header">
           <div>
             <h1>测验与听写</h1>
-            <p class="subtitle">支持词义选择、拼写填空、听音辨词与语境例句四种模式</p>
+            <p class="subtitle">词义选择 · 拼写填空 · 听音辨词 · 语境填空 · 快捷键 <kbd class="kbd-key">1–4</kbd> 作答</p>
           </div>
           <div class="header-actions">
             <select id="quiz-category" class="select-input">
@@ -404,9 +407,11 @@
 
         <div class="panel quiz-panel">
           <div id="quiz-start-screen" class="quiz-center">
+            <div class="quiz-start-pill">离线测验工坊</div>
             <h2 id="quiz-mode-title">选择题测验</h2>
             <p id="quiz-mode-desc">根据英文单词选出正确的中文释义，检验词汇反应速度。</p>
             <button class="btn btn-primary btn-lg" id="quiz-start-btn">开始本组训练</button>
+            <div class="quiz-start-tips">错题会自动收入易错词本，测验结束后可一键重练</div>
           </div>
 
           <div id="quiz-active-screen" class="hidden">
@@ -414,6 +419,7 @@
               <span id="quiz-progress">第 1 / 8 题</span>
               <span id="quiz-score-live">得分: 0</span>
             </div>
+            <div class="quiz-progress-track"><div class="quiz-progress-fill" id="quiz-progress-fill"></div></div>
 
             <div class="quiz-prompt-box">
               <div id="quiz-prompt-main" class="quiz-prompt-main"></div>
@@ -446,7 +452,7 @@
             <p id="quiz-final-msg">正确率 100%，继续保持！</p>
             <div id="quiz-review-list" class="quiz-review-list"></div>
             <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-              <button class="btn btn-ghost hidden" id="quiz-retry-wrong-btn" type="button">🔁 只重练错题</button>
+              <button class="btn btn-ghost hidden" id="quiz-retry-wrong-btn" type="button">只重练错题</button>
               <button class="btn btn-primary" id="quiz-restart-btn">再来一组</button>
             </div>
           </div>
@@ -458,23 +464,24 @@
         <header class="view-header">
           <div>
             <h1>情景口语实战</h1>
-            <p class="subtitle">30 组真实生活、职场与学术场景 · 逐句跟读校准评级 · 角色扮演对话</p>
+            <p class="subtitle">30 组真实生活与职场场景 · 逐句跟读校准 · 角色扮演 <span id="dlg-progress-tag" class="header-progress-tag"></span></p>
           </div>
           <div class="header-actions">
+            <input id="dlg-search" type="search" class="search-input" placeholder="搜索场景/关键词..." />
             <select id="dlg-scene-filter" class="select-input">
               <option value="全部">全部场景 (30)</option>
             </select>
             <label class="toggle-label">
               <input type="checkbox" id="dlg-roleplay-toggle" />
-              角色扮演 (静音 You 跟读)
+              角色扮演 (静音 You)
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="dlg-hide-en" />
-              盲听模式 (隐藏英文)
+              盲听模式
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="dlg-show-zh" checked />
-              显示中文翻译
+              显示翻译
             </label>
           </div>
         </header>
@@ -489,7 +496,7 @@
                 <h2 id="dlg-title" style="margin-top: 8px;"></h2>
               </div>
               <div class="dlg-controls">
-                <button class="btn btn-ghost btn-sm-ctrl" id="dlg-calibrate-btn" type="button">🎙️ 校准麦克风</button>
+                <button class="btn btn-ghost btn-sm-ctrl" id="dlg-calibrate-btn" type="button">校准麦克风</button>
                 <button class="btn btn-ghost btn-sm-ctrl" id="dlg-record-btn" type="button">整段跟读评分</button>
                 <button class="btn btn-ghost btn-sm-ctrl hidden" id="dlg-playback-btn" type="button">▶ 回放录音</button>
                 <button class="btn btn-primary" id="dlg-play-all-btn">连续播放</button>
@@ -499,11 +506,11 @@
             <div class="eval-panel eval-panel-compact hidden" id="dlg-eval-panel">
               <div class="eval-top">
                 <div class="eval-title-row">
-                  <span class="eval-badge-tag">🎯 口语跟读校准评测</span>
+                  <span class="eval-badge-tag">口语跟读校准</span>
                   <span class="eval-cal-status" id="dlg-cal-status">底噪待校准</span>
                 </div>
                 <div class="eval-actions">
-                  <button class="btn btn-ghost btn-xs" id="dlg-eval-speak-btn" type="button">🔊 听示范</button>
+                  <button class="btn btn-ghost btn-xs" id="dlg-eval-speak-btn" type="button">听示范</button>
                   <button class="btn btn-ghost btn-xs hidden" id="dlg-eval-stop-rec-btn" type="button">停止并评分</button>
                 </div>
               </div>
@@ -529,9 +536,10 @@
         <header class="view-header">
           <div>
             <h1>实用语法手册</h1>
-            <p class="subtitle">30 节核心语法专题 · 双语例句播音朗读 · 易错辨析即学即练</p>
+            <p class="subtitle">30 节核心语法精讲 · 双语播音例句 · 即学即练 <span id="gram-progress-tag" class="header-progress-tag"></span></p>
           </div>
           <div class="header-actions">
+            <input id="gram-search" type="search" class="search-input" placeholder="搜索语法标题/要点..." />
             <select id="gram-cat-filter" class="select-input">
               <option value="全部">全部专题 (30)</option>
             </select>
@@ -579,7 +587,7 @@
         <header class="view-header">
           <div>
             <h1>词海词库管理</h1>
-            <p class="subtitle">全阶段 15,000+ 词库检索 · 收藏与错题筛选 · 自定义词表导入导出</p>
+            <p class="subtitle">全阶段词库检索 · 收藏与易错词筛选 · 导入导出</p>
           </div>
           <div class="header-actions">
             <button class="btn btn-ghost" id="open-export-modal">导出词库</button>
@@ -728,11 +736,11 @@
       <div class="eval-panel" id="wb-eval-panel" style="margin:0;">
         <div class="eval-top">
           <div class="eval-title-row">
-            <span class="eval-badge-tag">🎯 发音校准</span>
+            <span class="eval-badge-tag">发音跟读校准</span>
             <span class="eval-cal-status" id="wb-cal-status">底噪待校准</span>
           </div>
           <div class="eval-actions">
-            <button class="btn btn-ghost btn-xs" id="wb-calibrate-btn" type="button">🎙️ 校准麦克风</button>
+            <button class="btn btn-ghost btn-xs" id="wb-calibrate-btn" type="button">校准麦克风</button>
           </div>
         </div>
         <div class="eval-words" id="wb-eval-words"></div>
@@ -744,9 +752,9 @@
         <div class="eval-result hidden" id="wb-eval-result"></div>
       </div>
       <div class="modal-actions" style="margin-top:14px;">
-        <button type="button" class="btn btn-ghost" id="wb-shadow-listen-btn">🔊 听标准发音</button>
+        <button type="button" class="btn btn-ghost" id="wb-shadow-listen-btn">听标准发音</button>
         <button type="button" class="btn btn-ghost hidden" id="wb-playback-btn">▶ 回放我的</button>
-        <button type="button" class="btn btn-primary" id="wb-record-btn">🎙️ 开始跟读评分</button>
+        <button type="button" class="btn btn-primary" id="wb-record-btn">开始跟读评分</button>
       </div>
     </div>
   </div>

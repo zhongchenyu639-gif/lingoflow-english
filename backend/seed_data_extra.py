@@ -561,7 +561,7 @@ EXTRA_GRAMMAR = [
             {"en": "Sorry for the late reply. No worries at all, makes total sense.", "zh": "抱歉回复晚了。完全没事，完全理解。"},
         ],
         "common_mistakes": [
-            "错误：I don't think it will rain. — No, I hope not.（注意表达“希望不要这样”不说 I don't hope so，而说 I hope not!）",
+            "错误：Will it rain tomorrow? — I don't hope so. → 正确：Will it rain tomorrow? — I hope not.（表达“我希望不要这样”不说 I don't hope so，而说 I hope not）",
         ],
     },
 ]

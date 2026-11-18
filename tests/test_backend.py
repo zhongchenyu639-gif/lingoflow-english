@@ -192,7 +192,7 @@ class TestLingoFlowBackend(unittest.TestCase):
 
         pack_dir = Path(self.tmp_dir.name) / "voice_packs"
         pack_dir.mkdir()
-        for code, payload in (("us", b"ID3-us-audio"), ("gb", b"ID3-gb-audio")):
+        for code, payload in (("us", b"ID3-us-audio"), ("gb", b"ID3-gb-audio"), ("zh", b"ID3-zh-audio")):
             conn = sqlite3.connect(pack_dir / f"voice_{code}.db")
             conn.execute("CREATE TABLE audio (key TEXT PRIMARY KEY, mp3 BLOB NOT NULL)")
             conn.execute("INSERT INTO audio VALUES (?, ?)", ("serendipity", payload))
@@ -201,10 +201,37 @@ class TestLingoFlowBackend(unittest.TestCase):
 
         us = get_pack_audio("  Serendipity ", "us-neural", pack_dir)
         gb = get_pack_audio("serendipity", "gb-neural", pack_dir)
+        zh = get_pack_audio("serendipity", "zh-CN", pack_dir)
         self.assertEqual(base64.b64decode(us["audio_b64"]), b"ID3-us-audio")
         self.assertEqual(base64.b64decode(gb["audio_b64"]), b"ID3-gb-audio")
+        self.assertEqual(base64.b64decode(zh["audio_b64"]), b"ID3-zh-audio")
         self.assertFalse(get_pack_audio("unknownword", "us-neural", pack_dir)["ok"])
         self.assertFalse(get_pack_audio("serendipity", "us-neural", pack_dir / "missing")["ok"])
+
+    def test_cloze_skips_empty_examples_and_prefers_same_pos_distractors(self) -> None:
+        new_word = self.api.add_word(
+            {
+                "word": "xylophone",
+                "phonetic": "/ˈzaɪləfəʊn/",
+                "part_of_speech": "n.",
+                "meaning_zh": "木琴",
+                "example_en": "",
+                "example_zh": "",
+                "category": "测验无例句",
+            }
+        )
+        qs = self.api.get_quiz_questions(mode="cloze", category="测验无例句", count=3)
+        self.assertGreaterEqual(len(qs), 1)
+        for q in qs:
+            self.assertNotEqual(q["word"], "xylophone")
+            self.assertNotRegex(q["cloze_en"], r"^______\s*\(")
+
+        # Verify seeded cloze words with nouns get options from pool (4 options including answer)
+        choice_qs = self.api.get_quiz_questions(mode="choice", count=4)
+        self.assertEqual(len(choice_qs), 4)
+        for cq in choice_qs:
+            self.assertEqual(len(cq["options"]), 4)
+            self.assertIn(cq["id"], [o["id"] for o in cq["options"]])
 
 
 if __name__ == "__main__":

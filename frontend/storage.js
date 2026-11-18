@@ -651,15 +651,47 @@
         if (allWords.length < 4) return [];
 
         const pool = filterWords(allWords, "", category);
-        const activePool = pool.length ? pool : allWords;
+        let activePool = pool.length ? pool : allWords;
+        if (mode === "cloze") {
+          const hasValidCloze = (w) => {
+            const ex = String(w.example_en || "").trim();
+            const word = String(w.word || "").trim();
+            return Boolean(ex && word && ex.toLowerCase().includes(word.toLowerCase()));
+          };
+          let clozePool = activePool.filter(hasValidCloze);
+          if (!clozePool.length) {
+            clozePool = allWords.filter(hasValidCloze);
+          }
+          if (clozePool.length) {
+            activePool = clozePool;
+          }
+        }
+
+        const wordsByPos = new Map();
+        for (const w of allWords) {
+          const pos = String(w.part_of_speech || "").trim().toLowerCase();
+          if (!pos) continue;
+          if (!wordsByPos.has(pos)) wordsByPos.set(pos, []);
+          wordsByPos.get(pos).push(w);
+        }
+
         const selected = shuffleArray(activePool).slice(0, Math.min(Number(count) || 8, activePool.length));
 
         return selected.map((item) => {
+          const itemPos = String(item.part_of_speech || "").trim().toLowerCase();
+          const samePos = itemPos
+            ? (wordsByPos.get(itemPos) || []).filter((w) => w.id !== item.id)
+            : [];
           const distractors = [];
-          while (distractors.length < 3) {
-            const pick = allWords[Math.floor(Math.random() * allWords.length)];
-            if (pick.id !== item.id && !distractors.some((d) => d.id === pick.id)) {
-              distractors.push(pick);
+          if (samePos.length >= 3) {
+            distractors.push(...shuffleArray(samePos).slice(0, 3));
+          } else {
+            distractors.push(...shuffleArray(samePos));
+            while (distractors.length < 3) {
+              const pick = allWords[Math.floor(Math.random() * allWords.length)];
+              if (pick.id !== item.id && !distractors.some((d) => d.id === pick.id)) {
+                distractors.push(pick);
+              }
             }
           }
           const options = shuffleArray([item, ...distractors]);
@@ -764,7 +796,8 @@
       async get_offline_audio(text, accent = "us-neural") {
         const key = String(text || "").trim().toLowerCase();
         if (!key) return { ok: false, error: "Empty text" };
-        const code = accent === "gb-neural" || accent === "en-GB" ? "gb" : "us";
+        const low = String(accent || "").toLowerCase();
+        const code = low.startsWith("zh") ? "zh" : low === "gb-neural" || low === "en-gb" ? "gb" : "us";
         const bucket = fnv1aBucket(key);
         const cacheKey = `${code}/${bucket}`;
 
